@@ -231,7 +231,16 @@ def main():
             return clauses
 
         # --- action buttons -------------------------------------------------------
-        llm_model = st.selectbox("LLMモデル", ["gpt-4.1", "gpt-4.1-mini"])
+        llm_model = st.selectbox(
+            "LLMモデル",
+            [
+                "gpt-4.1",
+                "gpt-4.1-mini",
+                "gpt-5-mini",
+                "gpt-5-nano",
+                "gpt-5",
+            ],
+        )
         exam_clicked = st.button("審査開始")
 
         if exam_clicked:

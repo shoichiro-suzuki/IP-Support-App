@@ -21,15 +21,25 @@ azure_api_version = os.getenv("OPENAI_API_VERSION", "2024-12-01-preview")
 
 # 共有リソース
 def get_llm(model: str = "gpt-4.1") -> AzureChatOpenAI:
-    return AzureChatOpenAI(
-        openai_api_key=azure_api_key,
-        openai_api_version=azure_api_version,
-        azure_endpoint=azure_endpoint,
-        azure_deployment=model,
-        temperature=0.0,
-        timeout=30,
-        max_retries=0,
-    )
+    if model == "gpt-5-nano" or model == "gpt-5-mini" or model == "gpt-5":
+        return AzureChatOpenAI(
+            openai_api_key=azure_api_key,
+            openai_api_version=azure_api_version,
+            azure_endpoint=azure_endpoint,
+            azure_deployment=model,
+            timeout=30,
+            max_retries=0,
+        )
+    else:
+        return AzureChatOpenAI(
+            openai_api_key=azure_api_key,
+            openai_api_version=azure_api_version,
+            azure_endpoint=azure_endpoint,
+            azure_deployment=model,
+            temperature=0.0,
+            timeout=30,
+            max_retries=0,
+        )
 
 
 def get_llm_semaphore(max_concurrency: int = 8) -> asyncio.Semaphore:
