@@ -1,0 +1,46 @@
+file_sample/
+old/
+VoiceMe/
+設計/
+契約書サンプル/
+logs/
+old_pyside6/
+Examination_data_sample.py
+match_cl_and_kn.json
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+
+# Local development settings
+.git
+local_settings.py
+
+# Unit test / coverage reports
+.coverage
+.pytest_cache/
+test*.py
+htmlcov/
+
+# Logs
+*.log
