@@ -144,7 +144,7 @@ def main():
                 "条文",
                 value=st.session_state.get("exam_intro", ""),
                 key="exam_clause_intro",
-                height=75,
+                height="content",
             )
             # 審査結果（懸念事項）の表示（introduction用）
             if st.session_state.get("analyzed_clauses"):
@@ -152,19 +152,82 @@ def main():
                     if analyzed.get("clause_number") == "前文":
                         if analyzed.get("amendment_clause"):
                             st.markdown("---")
-                            st.text_area(
-                                "修正条文：",
-                                f"{analyzed.get('amendment_clause', '')}",
-                                height=75,
-                            )
-                            st.markdown("**懸念事項：**")
-                            concern = analyzed.get("concern", "")
-                            if isinstance(concern, list):
-                                concern = "\n".join(str(x) for x in concern)
-                            st.markdown(
-                                concern.replace("\n", "<br>"),
-                                unsafe_allow_html=True,
-                            )
+                            col1, col2 = st.columns([1, 9])
+                            with col1:
+                                st.markdown("**修正条文：**")
+                            with col2:
+                                amendment_clause = analyzed.get("amendment_clause", "")
+                                if isinstance(amendment_clause, list):
+                                    amendment_clause = "\n".join(
+                                        str(x) for x in amendment_clause
+                                    )
+                                st.markdown(
+                                    amendment_clause.replace("\n", "<br>"),
+                                    unsafe_allow_html=True,
+                                )
+                            col1, col2 = st.columns([1, 9])
+                            with col1:
+                                st.markdown("**懸念事項：**")
+                            with col2:
+                                concern = analyzed.get("concern", "")
+                                if isinstance(concern, list):
+                                    concern = "\n".join(str(x) for x in concern)
+                                st.markdown(
+                                    concern.replace("\n", "<br>"),
+                                    unsafe_allow_html=True,
+                                )
+                            col1, col2 = st.columns([1, 9])
+                            with col1:
+                                st.markdown("**ナレッジ：**")
+                            with col2:
+                                knowledge_ids = analyzed.get("knowledge_ids", "")
+                                if not knowledge_ids:
+                                    st.markdown("該当ナレッジなし")
+                                else:
+                                    if not isinstance(knowledge_ids, list):
+                                        knowledge_ids = [knowledge_ids]
+                                    knowledge_all = st.session_state.get(
+                                        "knowledge_all", []
+                                    )
+                                    for kid in knowledge_ids:
+                                        kn = next(
+                                            (
+                                                k
+                                                for k in knowledge_all
+                                                if str(k.get("id")) == str(kid)
+                                            ),
+                                            None,
+                                        )
+                                        if kn:
+                                            knowledge_number = kn.get(
+                                                "knowledge_number", ""
+                                            )
+                                            with st.container():
+                                                with st.expander(
+                                                    f"ナレッジNo.{knowledge_number}",
+                                                    expanded=False,
+                                                ):
+                                                    st.markdown(
+                                                        f"<b>■ 対象条文</b>:<br>{kn.get('target_clause', '')}",
+                                                        unsafe_allow_html=True,
+                                                    )
+                                                    st.markdown(
+                                                        f"<b>■ レビューポイント</b>:<br>{kn.get('review_points', '').replace(chr(10), '<br>')}",
+                                                        unsafe_allow_html=True,
+                                                    )
+                                                    st.markdown(
+                                                        f"<b>■ アクションプラン</b>:<br>{kn.get('action_plan', '').replace(chr(10), '<br>')}",
+                                                        unsafe_allow_html=True,
+                                                    )
+                                                    st.markdown(
+                                                        f"<b>■ 条文サンプル</b>:<br>{kn.get('clause_sample', '').replace(chr(10), '<br>')}",
+                                                        unsafe_allow_html=True,
+                                                    )
+                                        else:
+                                            st.markdown(
+                                                f"ID: {kid} のナレッジが見つかりません",
+                                                unsafe_allow_html=True,
+                                            )
                         else:
                             st.markdown("---")
                             st.markdown("懸念事項なし")
@@ -193,19 +256,84 @@ def main():
                         if analyzed.get("clause_number") == clause.get("clause_number"):
                             if analyzed.get("amendment_clause"):
                                 st.markdown("---")
-                                st.text_area(
-                                    "修正条文：",
-                                    f"{analyzed.get('amendment_clause', '')}",
-                                    height="content",
-                                )
-                                st.markdown("**懸念事項：**")
-                                concern = analyzed.get("concern", "")
-                                if isinstance(concern, list):
-                                    concern = "\n".join(str(x) for x in concern)
-                                st.markdown(
-                                    concern.replace("\n", "<br>"),
-                                    unsafe_allow_html=True,
-                                )
+                                col1, col2 = st.columns([1, 9])
+                                with col1:
+                                    st.markdown("**修正条文：**")
+                                with col2:
+                                    amendment_clause = analyzed.get(
+                                        "amendment_clause", ""
+                                    )
+                                    if isinstance(amendment_clause, list):
+                                        amendment_clause = "\n".join(
+                                            str(x) for x in amendment_clause
+                                        )
+                                    st.markdown(
+                                        amendment_clause.replace("\n", "<br>"),
+                                        unsafe_allow_html=True,
+                                    )
+                                col1, col2 = st.columns([1, 9])
+                                with col1:
+                                    st.markdown("**懸念事項：**")
+                                with col2:
+                                    concern = analyzed.get("concern", "")
+                                    if isinstance(concern, list):
+                                        concern = "\n".join(str(x) for x in concern)
+                                    st.markdown(
+                                        concern.replace("\n", "<br>"),
+                                        unsafe_allow_html=True,
+                                    )
+                                col1, col2 = st.columns([1, 9])
+                                with col1:
+                                    st.markdown("**ナレッジ：**")
+                                with col2:
+                                    knowledge_ids = analyzed.get("knowledge_ids", "")
+                                    if not knowledge_ids:
+                                        st.markdown("該当ナレッジなし")
+                                    else:
+                                        if not isinstance(knowledge_ids, list):
+                                            knowledge_ids = [knowledge_ids]
+                                        knowledge_all = st.session_state.get(
+                                            "knowledge_all", []
+                                        )
+                                        for kid in knowledge_ids:
+                                            kn = next(
+                                                (
+                                                    k
+                                                    for k in knowledge_all
+                                                    if str(k.get("id")) == str(kid)
+                                                ),
+                                                None,
+                                            )
+                                            if kn:
+                                                knowledge_number = kn.get(
+                                                    "knowledge_number", ""
+                                                )
+                                                with st.container():
+                                                    with st.expander(
+                                                        f"ナレッジNo.{knowledge_number}",
+                                                        expanded=False,
+                                                    ):
+                                                        st.markdown(
+                                                            f"<b>■ 対象条文</b>:<br>{kn.get('target_clause', '')}",
+                                                            unsafe_allow_html=True,
+                                                        )
+                                                        st.markdown(
+                                                            f"<b>■ レビューポイント</b>:<br>{kn.get('review_points', '').replace(chr(10), '<br>')}",
+                                                            unsafe_allow_html=True,
+                                                        )
+                                                        st.markdown(
+                                                            f"<b>■ アクションプラン</b>:<br>{kn.get('action_plan', '').replace(chr(10), '<br>')}",
+                                                            unsafe_allow_html=True,
+                                                        )
+                                                        st.markdown(
+                                                            f"<b>■ 条文サンプル</b>:<br>{kn.get('clause_sample', '').replace(chr(10), '<br>')}",
+                                                            unsafe_allow_html=True,
+                                                        )
+                                            else:
+                                                st.markdown(
+                                                    f"ID: {kid} のナレッジが見つかりません",
+                                                    unsafe_allow_html=True,
+                                                )
                             else:
                                 st.markdown("---")
                                 st.markdown("懸念事項なし")

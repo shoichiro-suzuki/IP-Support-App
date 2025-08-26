@@ -24,6 +24,7 @@ def examination_api(
     import asyncio
     from collections import defaultdict
     from api import async_llm_service
+    from dotenv import load_dotenv
 
     data = {
         "contract_master_id": "",
@@ -41,11 +42,6 @@ def examination_api(
             for c in clauses
         ],
     }
-    # # デバッグ用：削除しないこと
-    # sample_path = os.path.join(
-    #     os.path.dirname(__file__), "..", "Examination_data_sample.py"
-    # )
-    # sample_path = os.path.abspath(sample_path)
 
     analyzed_clauses = []
     similar_clauses_knowledge = []
@@ -149,20 +145,27 @@ def examination_api(
         clause_results = await process_reviews()
         summarized_clauses = await process_summaries(clause_results)
 
-        # # デバッグ用：削除しないこと
-        # with open(sample_path, "w", encoding="utf-8") as f:
-        #     f.write("Examination_data = ")
-        #     json.dump(data, f, ensure_ascii=False, indent=4)
-        #     f.write("\n")
-        #     f.write("knowledge_all = ")
-        #     json.dump(knowledge_all, f, ensure_ascii=False, indent=4)
-        #     f.write("\n")
-        #     f.write("similar_clauses_knowledge = ")
-        #     json.dump(similar_clauses_knowledge, f, ensure_ascii=False, indent=4)
-        #     f.write("\n")
-        #     f.write("Analyzed_clauses = ")
-        #     json.dump(summarized_clauses, f, ensure_ascii=False, indent=4)
-        #     f.write("\n")
+        # デバッグ用: 
+        load_dotenv()
+        debug=os.getenv("DEBUG")
+        if debug:
+            sample_path = os.path.join(
+                os.path.dirname(__file__), "..", "Examination_data_sample.py"
+            )
+            sample_path = os.path.abspath(sample_path)
+            with open(sample_path, "w", encoding="utf-8") as f:
+                f.write("Examination_data = ")
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.write("\n")
+                f.write("knowledge_all = ")
+                json.dump(knowledge_all, f, ensure_ascii=False, indent=4)
+                f.write("\n")
+                f.write("similar_clauses_knowledge = ")
+                json.dump(similar_clauses_knowledge, f, ensure_ascii=False, indent=4)
+                f.write("\n")
+                f.write("Analyzed_clauses = ")
+                json.dump(summarized_clauses, f, ensure_ascii=False, indent=4)
+                f.write("\n")
 
         return summarized_clauses
 
