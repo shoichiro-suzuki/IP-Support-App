@@ -1,3 +1,5 @@
+### async_llm_service.py
+
 import asyncio
 import json
 import os
@@ -97,14 +99,44 @@ async def run_batch_reviews(
     chain: Runnable = prompt_template | llm | StrOutputParser()
 
     async def review_one(item: Dict[str, Any]) -> List[Dict[str, Any]]:
+        # 【審査対象データ】は["clause_number", "clause"]のみ抽出
+        clauses_min = [
+            {"clause_number": c.get("clause_number"), "clause": c.get("clause")}
+            for c in item.get("clauses", [])
+            if "clause_number" in c and "clause" in c
+        ]
+        # 【審査知見（knowledge）】は指定の6項目のみ抽出
+        knowledge_min = [
+            {
+                "id": k.get("id"),
+                "target_clause": k.get("target_clause"),
+                "knowledge_title": k.get("knowledge_title"),
+                "review_points": k.get("review_points"),
+                "action_plan": k.get("action_plan"),
+                "clause_sample": k.get("clause_sample"),
+            }
+            for k in item.get("knowledge", [])
+            if all(
+                x in k
+                for x in [
+                    "id",
+                    "target_clause",
+                    "knowledge_title",
+                    "review_points",
+                    "action_plan",
+                    "clause_sample",
+                ]
+            )
+        ]
         prompt = (
             "【審査対象データ】\n"
-            f"{json.dumps(item['clauses'], ensure_ascii=False)}\n"
+            f"{json.dumps(clauses_min, ensure_ascii=False)}\n"
             "【審査知見（knowledge）】\n"
-            f"{json.dumps(item['knowledge'], ensure_ascii=False)}\n\n"
+            f"{json.dumps(knowledge_min, ensure_ascii=False)}\n\n"
             "審査は提供する審査知見以外を絶対に利用しないでください。"
         )
         try:
+            # print("Prompt:", prompt)
             result = await ainvoke_with_limit(chain, prompt)
             return json.loads(result)
         except Exception as e:
@@ -115,7 +147,7 @@ async def run_batch_reviews(
                     "amendment_clause": "",
                     "knowledge_ids": [],
                 }
-                for clause in item["clauses"]
+                for clause in item.get("clauses", [])
             ]
 
     tasks = [review_one(item) for item in reviews]
@@ -144,6 +176,7 @@ async def run_batch_summaries(summaries: List[Dict[str, Any]]) -> List[Dict[str,
             f"【修正文案一覧】{json.dumps(item['amendments'], ensure_ascii=False)}\n"
         )
         try:
+            print("Prompt:", prompt)
             result = await ainvoke_with_limit(chain, prompt)
             parsed = json.loads(result)
             return {

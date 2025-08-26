@@ -1,3 +1,6 @@
+### examination_api.py
+
+
 def examination_api(
     contract_type: str,
     background_info: str,
@@ -145,9 +148,9 @@ def examination_api(
         clause_results = await process_reviews()
         summarized_clauses = await process_summaries(clause_results)
 
-        # デバッグ用: 
+        # デバッグ用:
         load_dotenv()
-        debug=os.getenv("DEBUG")
+        debug = os.getenv("DEBUG")
         if debug:
             sample_path = os.path.join(
                 os.path.dirname(__file__), "..", "Examination_data_sample.py"
@@ -160,8 +163,11 @@ def examination_api(
                 f.write("knowledge_all = ")
                 json.dump(knowledge_all, f, ensure_ascii=False, indent=4)
                 f.write("\n")
-                f.write("similar_clauses_knowledge = ")
-                json.dump(similar_clauses_knowledge, f, ensure_ascii=False, indent=4)
+                # f.write("similar_clauses_knowledge = ")
+                # json.dump(similar_clauses_knowledge, f, ensure_ascii=False, indent=4)
+                # f.write("\n")
+                f.write("Clause_results = ")
+                json.dump(clause_results, f, ensure_ascii=False, indent=4)
                 f.write("\n")
                 f.write("Analyzed_clauses = ")
                 json.dump(summarized_clauses, f, ensure_ascii=False, indent=4)
