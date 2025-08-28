@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>プロンプト説明.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+<link rel="stylesheet" href="file:///c%3A//Users//3783//AppData//Roaming//Code//User//costom.css" type="text/css">
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="%E5%A5%91%E7%B4%84%E5%AF%A9%E6%9F%BB%E3%82%A2%E3%83%97%E3%83%AA%E3%81%AEprompt%E8%AA%AC%E6%98%8E">契約審査アプリのPrompt説明</h1>
+<h2 id="%E5%AF%A9%E6%9F%BB%E3%83%95%E3%83%AD%E3%83%BC">審査フロー</h2>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart TD
+    A[(全ナレッジ<br>knowledge_all)]
+    B[(全条項<br>clauses)]
+    A --> C[Step1: ナレッジごとに関係する条項と対応付け]
+    B --> C
+    C --> D[(関連ナレッジを埋め込んだ条項<br>clauses_augmented)]
+	
+	A --> |1レコードずつ| a
+	a[(knowledge)] --> E
+    D --> E[Step2: ナレッジごとに関連する条項を審査]
+    E --> F[(ナレッジごとの審査結果<br>review_results_list)]
+    F --> |条項ごとに結合| f[(関連する全ナレッジの審査結果の結合)]
+
+    f --> G[Step3: 条項ごとに審査結果を結合処理]
+    G --> H[(条項ごとのまとめ<br>summary_results)]
+	H --> I(アプリ上に表示)
+</div></code></pre>
+<div style="page-break-after: always;"></div>
+<hr>
+<h2 id="step1-%E3%83%8A%E3%83%AC%E3%83%83%E3%82%B8%E3%81%94%E3%81%A8%E3%81%AB%E9%96%A2%E4%BF%82%E3%81%99%E3%82%8B%E6%9D%A1%E9%A0%85%E3%81%A8%E5%AF%BE%E5%BF%9C%E4%BB%98%E3%81%91">Step1: ナレッジごとに関係する条項と対応付け</h2>
+<h3 id="clausesaugmented--amatchingclauseandknowledge-knowledgeall-clauses">clauses_augmented = amatching_clause_and_knowledge( knowledge_all, clauses )</h3>
+<pre class="hljs"><code><div>clauses = [
+        {
+            &quot;clause_number&quot;: &quot;前文&quot;,
+            &quot;clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+            &quot;knowledge_id&quot;: []
+        },
+        {
+            &quot;clause_number&quot;: &quot;1&quot;,
+            &quot;clause&quot;: &quot;第1条\n（秘密情報）\n本契約において｢秘密情報｣とは、･･･開示後速やかに通知するものとする。&quot;,
+            &quot;knowledge_id&quot;: []
+        },...以降も文書全体がつづく...]
+</div></code></pre>
+<pre class="hljs"><code><div>knowledge_all = [
+    {
+        &quot;id&quot;: &quot;362d7a0d-5c29-4349-be4c-58182eecd502&quot;,
+        &quot;knowledge_number&quot;: 1,
+        &quot;contract_type&quot;: &quot;秘密保持&quot;,
+        &quot;target_clause&quot;: &quot;契約の対象業務を特定する記載がある条文または前文&quot;,
+        &quot;knowledge_title&quot;: &quot;前文・目的条項の明確性&quot;,
+        &quot;review_points&quot;: &quot;- 前文で契約の目的をわかりやすく記載し、複雑な場合は目的条項を独立させる。\n- 受領当事者の要求を満たすために、秘密情報の開示・使用範囲が目的定義の範囲内に入っているか確認する。&quot;,
+        &quot;action_plan&quot;: &quot;- 目的の表現が曖昧でないか、関係者が一目で理解できるかを確認する。\n- 必要に応じて範囲を拡大または調整し、当初想定した利用目的が達成できるように修正する。&quot;,
+        &quot;clause_sample&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+    {
+        &quot;id&quot;: &quot;2b914516-a814-45ae-a525-525b216e97b2&quot;,
+        &quot;knowledge_number&quot;: 2,
+        &quot;contract_type&quot;: &quot;秘密保持&quot;,
+        &quot;target_clause&quot;: &quot;契約の対象業務を特定する記載がある条文または前文&quot;,
+        &quot;knowledge_title&quot;: &quot;受領当事者にとっての目的範囲の適切性&quot;,
+        &quot;review_points&quot;: &quot;受領当事者にとっての目的範囲の適切性&quot;,
+        &quot;action_plan&quot;: &quot;- 受領当事者の要求を満たすために、秘密情報の開示・使用範囲が目的定義の範囲内に入っているか確認する。\n- 必要に応じて範囲を拡大または調整し、当初想定した利用目的が達成できるように修正する。&quot;,
+        &quot;clause_sample&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+    },...以降もN個ずつつづく...]
+</div></code></pre>
+<blockquote>
+<p>LLM処理で精度が落ちないように、契約書案の全文に対して、ナレッジをN個ずつで処理し、あとで結果を結合している。</p>
+</blockquote>
+<p><strong>Prompt</strong></p>
+<pre class="hljs"><code><div>あなたは日本語の契約書に精通したリーガルアシスタントです。
+タスク：各 knowledge.target_clause（審査知見が対象とする条項の条件）に合致する契約条項（clause_number）を、提供された clauses から特定してください。
+出力は **厳格なJSONのみ** で返します。余計な説明、コードブロック、注釈は一切含めません。
+
+要件:
+- 出力は配列。各要素は {{&quot;knowledge_id&quot;: str, &quot;clause_number&quot;: [str, ...]}} の形。
+- 条項が特定できない／確度が低い場合は &quot;clause_number&quot;: [] とする。
+- &quot;clause_number&quot; は入力の clauses 内の &quot;clause_number&quot;（文字列）で返す。整数にはしない。
+- 解釈は「条項の機能」ベース（例：定義条項、目的条項、開示義務条項 等）。単語一致のみで判断しない。
+- 過剰な割当は禁止。曖昧なら空配列を選ぶ。
+- JSON以外を一切出力しない。
+
+与えられるデータ:
+  knowledge_all: {knowledge_id, target_clause}
+  clauses: {clause_number, clause}
+
+出力フォーマット（厳格に遵守）: [
+    {{&quot;knowledge_id&quot;: &quot;xxx-xxx&quot;, &quot;clause_number&quot;: [&quot;1&quot;, &quot;2&quot;]}},
+    {{&quot;knowledge_id&quot;: &quot;yyy-yyy&quot;, &quot;clause_number&quot;: []}}
+]
+</div></code></pre>
+<p><strong>出力結果</strong></p>
+<pre class="hljs"><code><div>clauses_augmented = [
+        {
+            &quot;clause_number&quot;: &quot;前文&quot;,
+            &quot;clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+            &quot;knowledge_id&quot;: [
+                &quot;362d7a0d-5c29-4349-be4c-58182eecd502&quot;,
+                &quot;2b914516-a814-45ae-a525-525b216e97b2&quot;,
+                &quot;1ed131a5-3abc-4cfc-922c-f3536b4bad29&quot;
+            ]
+        },
+        {
+            &quot;clause_number&quot;: &quot;1&quot;,
+            &quot;clause&quot;: &quot;第1条\n（秘密情報）\n本契約において｢秘密情報｣とは、･･･開示後速やかに通知するものとする。&quot;,
+            &quot;knowledge_id&quot;: [
+                &quot;dadcfc4e-94da-4e2a-8dcf-bc5ae6172c5d&quot;,
+                &quot;ffd5e1e9-fcc5-43d9-9680-4f41eeaf1733&quot;,
+                &quot;d77e04af-f01c-4521-bb44-1d26851bdaa9&quot;
+            ]
+        }]
+</div></code></pre>
+<div style="page-break-after: always;"></div>
+<hr>
+<h2 id="step2-%E3%83%8A%E3%83%AC%E3%83%83%E3%82%B8%E3%81%94%E3%81%A8%E3%81%AB%E9%96%A2%E9%80%A3%E6%9D%A1%E9%A0%85%E3%82%92%E5%AF%A9%E6%9F%BB">Step2: ナレッジごとに関連条項を審査</h2>
+<h3 id="reviewresultslist--runbatchreviewsclauses-knowledge">review_results_list = run_batch_reviews(clauses, knowledge)</h3>
+<pre class="hljs"><code><div>clauses = [{
+	&quot;clause_number&quot;: &quot;7&quot;, 
+	&quot;clause&quot;: &quot;第7条\n（期間）\n本契約の有効期間は、2024年4月1日 から2025年3月31日までとする。但し、上記期間は、各当事者の書面による合意により、変更す ることができる。&quot;}, 
+	{
+	&quot;clause_number&quot;: &quot;8&quot;, 
+	&quot;clause&quot;: &quot;第8条\n（残存条項）第1条\n乃至第6条\n、第9条\n及び第10条\nの規定は、本契約の終了後も3年間効力を有するものとする。&quot;
+}]
+
+knowledge = [{
+	&quot;id&quot;: &quot;27f85965-3e5c-4486-a7bf-2ad8da8246d2&quot;, 
+	&quot;target_clause&quot;: &quot;以下(1), (2)の両方　(1) 契約の有効期間を定める条項、(2) 契約終了後の効力発揮について述べる条項&quot;, 
+	&quot;knowledge_title&quot;: &quot;秘密保持義務等の残存期間の妥当性&quot;, 
+    &quot;review_points&quot;: &quot;秘密保持義務等の残存期間の妥当性&quot;, 
+	&quot;action_plan&quot;: &quot;契約終了後の秘密保持義務・目的外使用禁止義務等の存続期 間が、情報の性質・技術分野の陳腐化スピードを踏まえた適切期間（一般的に2～5年、必要に応じて永久保持も検討）に設定されているか確認し、必要に応じて調整を提案する&quot;, 
+	&quot;clause_sample&quot;: &quot;第７条（期間）\n　　本契約の有効期間は、2024年4月1日から2025年3月31日までとする。但し、上記期間は、各当事者の書面による合意により、変更することができる。\n第８条（残存条項）\n　　第１条乃至第６条、第９条及び第１０条の規定は、本契約の終了後も３年間効力を有するものとする。&quot;}]
+</div></code></pre>
+<p><strong>Prompt</strong></p>
+<pre class="hljs"><code><div>あなたは契約審査の専門家です。以下の審査対象データと審査知見をもとに、各条項ごとに懸念点(concern)と修正条文(amendment_clause)を出力してください。
+懸念点(concern)は、端的な箇条書きで提供してください。
+修正した条文(amendment_clause)は、要変更箇所を明示し、端的に示してください。
+審査の根拠とする knowledge_ids を必ず提示し、提供する審査知見以外を利用した審査は絶対にしないでください。
+審査の結果懸念がない場合は、&quot;concern&quot; および &quot;amendment_clause&quot; を null で出力してください。
+
+【出力形式】
+必ず以下の厳格なJSON配列形式で出力してください。
+[
+	{{
+	    &quot;clause_number&quot;: &lt;条項番号（文字列）&gt;,
+        &quot;concern&quot;: &lt;懸念点コメント&gt; or null,'
+        &quot;amendment_clause&quot;: &lt;修正条文&gt; or null,'
+        &quot;knowledge_ids&quot;: [&lt;ナレッジIDの配列&gt;]'
+  }}, ...
+]
+
+【審査対象データ】
+	clauses: ナレッジひとつずつに関連する条項を全てまとめたデータ（1のナレッジで複数条項が対応する場合はすべての条項データが含まれる）
+
+【審査知見（knowledge）】
+	knowledge: ひとつずつのナレッジデータ
+
+審査は提供する審査知見以外を絶対に利用しないでください。
+</div></code></pre>
+<p>処理はナレッジごとに行うが、出力は条項ごととしている。
+審査した結果、懸念が無いなら &quot;concern&quot;: null となっている。</p>
+<pre class="hljs"><code><div>review_results_list = {
+    &quot;前文&quot;: [
+        {
+            &quot;clause_number&quot;: &quot;前文&quot;,
+            &quot;concern&quot;: [&quot;契約の対象業務（目的範囲）が具体的かつ限定的に記載されていないため、開示情報が想定外の用途に使われるリスクがある。&quot;],
+            &quot;amendment_clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+            &quot;knowledge_ids&quot;: [&quot;1ed131a5-3abc-4cfc-922c-f3536b4bad29&quot;]
+        },
+        {
+            &quot;clause_number&quot;: &quot;前文&quot;,
+            &quot;concern&quot;: [
+                &quot;契約の目的が『互いに開示する情報の秘密保持』としか記載されておらず、具体的な業務や目的が明確でない。&quot;,
+                &quot;秘密情報の開示・使用範囲が目的定義の範囲内に入っているか不明確。&quot;
+            ],
+            &quot;amendment_clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+            &quot;knowledge_ids&quot;: [&quot;362d7a0d-5c29-4349-be4c-58182eecd502&quot;]
+        },
+        {
+            &quot;clause_number&quot;: &quot;前文&quot;,
+            &quot;concern&quot;: [
+                &quot;契約の対象業務（目的）が明確に記載されていないため、秘密情報の開示・使用範囲が不明確となり、受領当事者の要求を満たす目的範囲の適切性が担保されていない。&quot;
+            ],
+            &quot;amendment_clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+            &quot;knowledge_ids&quot;: [
+                &quot;2b914516-a814-45ae-a525-525b216e97b2&quot;
+            ]
+        }
+    ],
+    &quot;7&quot;: [
+        {
+            &quot;clause_number&quot;: &quot;7&quot;,
+            &quot;concern&quot;: null,
+            &quot;amendment_clause&quot;: null,
+            &quot;knowledge_ids&quot;: [
+                &quot;1ed131a5-3abc-4cfc-922c-f3536b4bad29&quot;
+            ]
+        },
+        {
+            &quot;clause_number&quot;: &quot;7&quot;,
+            &quot;concern&quot;: null,
+            &quot;amendment_clause&quot;: null,
+            &quot;knowledge_ids&quot;: [
+                &quot;27f85965-3e5c-4486-a7bf-2ad8da8246d2&quot;
+            ]
+        }
+    ],
+    &quot;1&quot;: [
+        {
+            &quot;clause_number&quot;: &quot;1&quot;,
+            &quot;concern&quot;: [
+                &quot;書面・図面等の有形物による開示情報に秘密である旨の明示的表示義務が規定されていない。&quot;,
+                &quot;電子メール等の電気通信手段による開示情報に秘密である旨の表示義務が規定されていない。&quot;,
+                &quot;口頭又は視覚的手段による開示情報について、開示時の表明のみであり、開示後30日以内の書面化義務が規定されていない。&quot;,
+                &quot;本業務のために提供・製作した物品や試験等により得られた情報について、秘密である旨の書面による明示義務が規定されていない。&quot;,
+                &quot;開示当事者の秘密情報に基づいて創出された情報および本件目的の成果が秘密情報とみなされる旨の規定がない。&quot;
+            ],
+            &quot;amendment_clause&quot;: &quot;第1条（秘密情報）\n本契約において｢秘密情報｣とは、本契約締結の事実及び内容、本契約に基づき秘密情報を開示する当事者（以下「開示者」という。）が秘密情報を受領する当事者（以下「受領者」という。）に開示した技術情報、並びに本業務の過程で知り得た他の当事者の業務上及び技術上の情報のうち、次の各号に該当するものをいう。\n（１）書面、図面、電子媒体及びその他有形物による開示であって、当該書面又は媒体上に秘密である旨の表示をなしたもの。\n（２）電子メール等の電気通信手段により開示された情報であって、当該情報に秘密である旨の表示をなしたもの。\n（３）口頭又は視覚的手段によって開示された情報であって、開示の際に秘密である旨を表明し、かつ、開示の日より３０日以内に当該情報の概要及び当該情報が秘密である旨を明示した書面が提供されたもの。\n（４）本業務のために開示者が受領者に提供した物品及び本業務のために製作した物品で当該各物品が秘密である旨を明示した書面が提供された物品、並びに、本業務のために行った試験等により得られた情報で当該情報が秘密である旨を明示した書面が提供された情報。\n（５）開示当事者の秘密情報に基づいて創出された情報および本件目的の成果は、秘密情報とみなす。\n（６）その他、各当事者が別途協議の上、秘密である旨を書面により確認した情報。&quot;,
+            &quot;knowledge_ids&quot;: [
+                &quot;ffd5e1e9-fcc5-43d9-9680-4f41eeaf1733&quot;
+            ]
+        },
+        {
+            &quot;clause_number&quot;: &quot;1&quot;,
+            &quot;concern&quot;: [
+                &quot;秘密情報の定義において、開示当事者の秘密情報に基づき創出された成果や新情報、契約締結前に開示された情報の扱いが明確でない。&quot;,
+                &quot;口頭・視覚的開示情報について、事後の書面確認プロセス（例：30日以内の書面提供）が規定されていない。&quot;,
+                &quot;本業務のために製作した物品や試験等により得られた情報について、秘密である旨の書面確認プロセスが不明確。&quot;
+            ],
+            &quot;amendment_clause&quot;: &quot;第1条（秘密情報）\n本契約において｢秘密情報｣とは、本契約締結の事実及び内容、本契約に基づき秘密情報を開示する当事者（以下「開示者」という。）が秘密情報を受領する当事者（以下「受領者」という。）に開示した技術情報、並びに本業務の過程で知り得た他の当事者の業務上及び技術上の情報のうち、次の各号に該当するものをいう。\n（1）書面、図面、電子媒体及びその他有形物による開示であって、当該書面又は媒体上に秘密である旨の表示をなしたもの。\n（2）電子メール等の電気通信手段により開示された情報であって、当該情報に秘密である旨の表示をなしたもの。\n（3）口頭又は視覚的手段によって開示された情報であって、開示の際に秘密である旨を表明し、かつ、開示の日より30日以内に当該情報の概要及び当該情報が秘密である旨を明示した書面が提供されたもの。\n（4）本業務のために開示者が受領者に提供した物品及び本業務のために製作した物品で当該各物品が秘密である旨を明示した書面が提供された物品、並びに、本業務のために行った試験等により得られた情報で当該情報が秘密である旨を明示した書面が提供された情報。\n（5）開示当事者の秘密情報に基づいて創出された情報および本件目的の成果は、秘密情報とみなす。\n（6）その他、各当事者が別途協議の上、秘密である旨を書面により確認した情報。&quot;,
+            &quot;knowledge_ids&quot;: [&quot;d77e04af-f01c-4521-bb44-1d26851bdaa9&quot;]
+        },
+        {
+            &quot;clause_number&quot;: &quot;1&quot;,
+            &quot;concern&quot;: [
+                &quot;秘密情報の定義において、書面・電子媒体・電気通信手段による開示情報に『秘密である旨の表示』要件が明記されていない。&quot;,
+                &quot;口頭・視覚的開示情報について、開示後に書面で秘密である旨を通知する要件がないため、認定範囲が曖昧となる可能性がある。&quot;,
+                &quot;本業務の成果物や秘密情報に基づいて創出された情報が秘密情報に含まれる旨の明記がない。&quot;,
+                &quot;秘密情報の認定手続き（例：開示後30日以内の書面通知等）が不足している。&quot;
+            ],
+            &quot;amendment_clause&quot;: &quot;第1条（秘密情報）\n本契約において｢秘密情報｣とは、本契約締結の事実及び内容、本契約に基づき秘密情報を開示する当事者（以下「開示者」という。）が秘密情報を受領する当事者（以下「受領者」という。）に開示した技術情報、並びに本業務の過程で知り得た他の当事者の業務上及び技術上の情報のうち、次の各号に該当するものをいう。\n（1）書面、図面、電子媒体及びその他有形物による開示であって、当該書面又は媒体上に秘密である旨の表示をなしたもの。\n（2）電子メール等の電気通信手段により開示された情報であって、当該情報に秘密である旨の表示をなしたもの。\n（3）口頭又は視覚的手段によって開示された情報であって、開示の際に秘密である旨を表明し、かつ、開示の日より30日以内に当該情報の概要及び当該情報が秘密である旨を明示した書面が提供されたもの。\n（4）本業務のために開示者が受領者に提供した物品及び本業務のために製作した物品で当該各物品が秘密である旨を明示した書面が提供された物品、並びに、本業務のために行った試験等により得られた情報で当該情報が秘密である旨を明示した書面が提供された情報。\n（5）開示当事者の秘密情報に基づいて創出された情報および本件目的の成果は、秘密情報とみなす。\n（6）その他、各当事者が別途協議の上、秘密である旨を書面により確認した情報。&quot;,
+            &quot;knowledge_ids&quot;: [&quot;dadcfc4e-94da-4e2a-8dcf-bc5ae6172c5d&quot;]
+        }
+    ],
+    &quot;8&quot;: [
+        {
+            &quot;clause_number&quot;: &quot;8&quot;,
+            &quot;concern&quot;: null,
+            &quot;amendment_clause&quot;: null,
+            &quot;knowledge_ids&quot;: [&quot;27f85965-3e5c-4486-a7bf-2ad8da8246d2&quot;]
+        }
+    ]
+}
+</div></code></pre>
+<div style="page-break-after: always;"></div>
+<hr>
+<h2 id="step3-%E6%9D%A1%E9%A0%85%E3%81%94%E3%81%A8%E3%81%AB%E5%AF%A9%E6%9F%BB%E7%B5%90%E6%9E%9C%E3%82%92%E7%B5%90%E5%90%88%E5%87%A6%E7%90%86">Step3: 条項ごとに審査結果を結合処理</h2>
+<h3 id="summaryresults--runbatchsummariesclausenumber-concerns-amendments">summary_results = run_batch_summaries(clause_number, concerns, amendments)</h3>
+<pre class="hljs"><code><div>clause_number: 前文
+
+concerns: [
+	[&quot;契約の目的が具体的かつ限定的に記載されていないため、開示情報の使用範囲が不明確。&quot;, &quot;目的範囲の制限がないため、想定外の用途で情報が使用されるリスクがある。&quot;], 
+	[&quot;契約の目的が明確に記載されていないため、秘密保持の範囲や使用目的が不明確。&quot;, &quot;関係者が契約の対象業務を一目で理解できない可能性がある。&quot;], 
+    [&quot;契約の対象業務や目的が明示されていないため、秘密情報の開示・使用範囲が不明確である。&quot;, &quot;受領当事者の利用目的が特定されていないため、目的範囲の適切性が担保されていない。&quot;]
+]
+amendments: [
+    &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;, 
+    &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;, 
+    &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;]
+</div></code></pre>
+<p><strong>Ptompt</strong></p>
+<pre class="hljs"><code><div>あなたは契約審査の専門家です。以下の複数の指摘事項・修正条項案を統合し、重複や類似内容をまとめて簡潔にしてください。
+【出力形式】
+{&quot;concern&quot;: &lt;要約した懸念点&gt;, &quot;amendment_clause&quot;: &lt;統合した修正条項案&gt;}
+
+【条項番号】clause_number
+【指摘事項一覧】concerns
+【修正文案一覧】amendments
+</div></code></pre>
+<pre class="hljs"><code><div>summary_results = [
+	{
+        &quot;clause_number&quot;: &quot;前文&quot;,
+        &quot;concern&quot;: &quot;契約の目的および対象業務が具体的かつ明確に記載されておらず、秘密情報の使用範囲や保持範囲が不明確であるため、情報の不適切な使用リスクがある。&quot;,
+        &quot;amendment_clause&quot;: &quot;武蔵精密工業株式会社（以下「甲」という。）と株式会社AAA（以下「乙」という。）とは、甲と乙の〇〇製品の共同開発の可能性検討（以下「本業務」という。）を目的として、互いに開示する情報の秘密保持に関し、以下の通り定める。&quot;,
+        &quot;knowledge_ids&quot;: [
+            &quot;362d7a0d-5c29-4349-be4c-58182eecd502&quot;,
+            &quot;2b914516-a814-45ae-a525-525b216e97b2&quot;,
+            &quot;1ed131a5-3abc-4cfc-922c-f3536b4bad29&quot;
+        ]
+    },
+    {
+        &quot;clause_number&quot;: &quot;1&quot;,
+        &quot;concern&quot;: &quot;秘密情報の定義が不明確で、特に口頭や視覚的手段による開示時の秘密保持表明とその後の書面化（30日以内の書面提供）が規定されていないこと、本業務のために提供・製作した物品や試験等で得られた情報の秘密情報該当が明示されていないこと、開示当事者の秘密情報に基づく創出情報や本件目的の成果の秘密情報該当が明記されていないこと、及び契約締結前に開示された情報の取り扱いが不明確である点。&quot;,
+        &quot;amendment_clause&quot;: &quot;第1条（秘密情報）\n本契約において「秘密情報」とは、本契約締結の事実及び内容、本契約に基づき秘密情報を開示する当事者（以下「開示者」という。）が秘密情報を受領する当事者（以下「受領者」という。）に開示した技術情報、並びに本業務の過程で知り得た他の当事者の業務上及び技術上の情報のうち、次の各号に該当するものをいう。\n(1) 書面、図面、電子媒体及びその他有形物によって開示された情報であって、当該書面又は媒体上に秘密である旨の表示をなしたもの。\n(2) 電子メール等の電気通信手段により開示された情報であって、当該情報に秘密である旨の表示をなしたもの。\n(3) 口頭又は視覚的手段によって開示された情報であって、開示の際に秘密である旨を表明し、かつ開示の日より30日以内に当該情報の概要及び秘密である旨を明示した書面が提供されたもの。受領者はこれを遵守するものとする。\n(4) 本業務のために開示者が受領者に提供した物品及び本業務のために製作した物品で、当該各物品が秘密である旨を明示した書面が提供された物品、並びに本業務のために行った試験等により得られた情報で当該情報が秘密である旨を明示した書面が提供された情報。\n(5) 開示当事者の秘密情報に基づいて創出された情報及び本件目的の成果。\n(6) 本契約締結前に開示された情報であって、秘密である旨を明示したもの。\n(7) その他、各当事者が別途協議の上、秘密である旨を書面により確認した情報。&quot;,
+        &quot;knowledge_ids&quot;: [
+            &quot;dadcfc4e-94da-4e2a-8dcf-bc5ae6172c5d&quot;,
+            &quot;ffd5e1e9-fcc5-43d9-9680-4f41eeaf1733&quot;,
+            &quot;d77e04af-f01c-4521-bb44-1d26851bdaa9&quot;
+        ]
+    }
+    {
+        &quot;clause_number&quot;: &quot;2&quot;,
+        &quot;concern&quot;: &quot;&quot;,
+        &quot;amendment_clause&quot;: &quot;&quot;,
+        &quot;knowledge_ids&quot;: []
+    },...条項の数だけ続く...]
+</div></code></pre>
+<p><strong>アプリ上の出力</strong></p>
+<ul>
+<li>条項</li>
+<li>修正条項: amendment_clause</li>
+<li>懸念事項: concern</li>
+<li>ナレッジ: knowledge_idsからデータを検索して表示</li>
+</ul>
+
+</body>
+</html>

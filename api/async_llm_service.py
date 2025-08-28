@@ -176,7 +176,7 @@ async def run_batch_summaries(summaries: List[Dict[str, Any]]) -> List[Dict[str,
             f"【修正文案一覧】{json.dumps(item['amendments'], ensure_ascii=False)}\n"
         )
         try:
-            print("Prompt:", prompt)
+            # print("Prompt:", prompt)
             result = await ainvoke_with_limit(chain, prompt)
             parsed = json.loads(result)
             return {
@@ -287,15 +287,13 @@ clauses（契約条項の本文）:
         for c in clauses:
             if "knowledge_id" not in c or c["knowledge_id"] is None:
                 c["knowledge_id"] = []
+        # 対象条項が無いナレッジIDはどの条項にも追加しない
         for item in response:
             k_id = item["knowledge_id"]
             targets = item.get("clause_number", [])
             if not targets:
-                for c in clauses:
-                    c["knowledge_id"].append(k_id)
-        for item in response:
-            k_id = item["knowledge_id"]
-            for num in item.get("clause_number", []):
+                continue  # 何もしない
+            for num in targets:
                 i = idx_by_num.get(num)
                 if i is not None:
                     clauses[i]["knowledge_id"].append(k_id)
@@ -346,10 +344,30 @@ clauses（契約条項の本文）:
     for k in knowledge_all:
         k_id = k["id"]
         mapped = _dedup(aggregate_map.get(k_id, []))
-        if not mapped:
-            mapped = all_clause_numbers.copy()
+        # 関連条項が無い場合は空配列で返す
         response.append({"knowledge_id": k_id, "clause_number": mapped})
 
     # --- 5) Step2: 付与
     clauses_augmented = _apply_step2([dict(c) for c in clauses], response)
+
+    # デバッグ用:
+    load_dotenv()
+    debug = os.getenv("DEBUG")
+    if debug:
+        sample_path = os.path.join(
+            os.path.dirname(__file__), "..", "Examination_data_sample.py"
+        )
+        sample_path = os.path.abspath(sample_path)
+        with open(sample_path, "w", encoding="utf-8") as f:
+            f.write("# amatching_clause_and_knowledge\n")
+            f.write("response = ")
+            json.dump(response, f, ensure_ascii=False, indent=4)
+            f.write("\n")
+            f.write("clauses_augmented = ")
+            json.dump(clauses_augmented, f, ensure_ascii=False, indent=4)
+            f.write("\n")
+            f.write("trace = ")
+            json.dump(trace, f, ensure_ascii=False, indent=4)
+            f.write("\n")
+
     return response, clauses_augmented, trace

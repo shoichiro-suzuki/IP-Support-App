@@ -44,6 +44,8 @@ def main():
         st.session_state["exam_intro"] = ""
     if "exam_page_status" not in st.session_state:
         st.session_state["exam_page_status"] = "start"
+    if "no_target_knowledges" not in st.session_state:
+        st.session_state["no_target_knowledges"] = []
 
     # --- file upload -----------------------------------------------------------
     uploaded = st.file_uploader(
@@ -222,11 +224,27 @@ def main():
             ]
             title = st.session_state["exam_title"]
             clauses = collect_exam_clauses()
-            _, clauses_augmented, _ = asyncio.run(
+            # knowledgeとclauseのマッピング結果を取得
+            mapping_response, clauses_augmented, _ = asyncio.run(
                 async_llm_service.amatching_clause_and_knowledge(
                     st.session_state["knowledge_all"], clauses
                 )
             )
+            # 関連条項が無いナレッジを抽出
+            no_target_knowledges = []
+            for m in mapping_response:
+                if not m.get("clause_number"):
+                    kid = m["knowledge_id"]
+                    kn = next(
+                        (
+                            k
+                            for k in st.session_state["knowledge_all"]
+                            if str(k.get("id")) == str(kid)
+                        ),
+                        None,
+                    )
+                    if kn:
+                        no_target_knowledges.append(kn)
             with st.spinner("審査中...", show_time=True):
                 try:
                     analyzed_clauses = examination_api(
@@ -243,11 +261,34 @@ def main():
                     else:
                         st.session_state["analyzed_clauses"] = analyzed_clauses
                         st.session_state["exam_page_status"] = "examination"
+                        st.session_state["no_target_knowledges"] = no_target_knowledges
                         st.rerun()
                 except Exception as e:
                     st.error(f"審査処理でエラーが発生しました: {e}")
     if st.session_state["exam_page_status"] == "examination":
         st.success("審査結果を表示しました。")
+        # 関連条項が無いナレッジを審査結果の後に表示
+        no_target_knowledges = st.session_state.get("no_target_knowledges", [])
+        if no_target_knowledges:
+            st.markdown("---")
+            st.subheader("関連条項が無いナレッジ")
+            for kn in no_target_knowledges:
+                knowledge_number = kn.get("knowledge_number", "")
+                with st.expander(
+                    f"ナレッジNo.{knowledge_number} (該当条項なし)", expanded=False
+                ):
+                    st.markdown(
+                        f"<b>■ 対象条項</b>:<br>{kn.get('target_clause', '')}",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<b>■ 審査観点</b>:<br>{kn.get('review_points', '').replace(chr(10), '<br>')}",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<b>■ 対応策</b>:<br>{kn.get('action_plan', '').replace(chr(10), '<br>')}",
+                        unsafe_allow_html=True,
+                    )
 
 
 def call_analyze_function(analyzed):

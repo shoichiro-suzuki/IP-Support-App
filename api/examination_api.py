@@ -156,7 +156,7 @@ def examination_api(
                 os.path.dirname(__file__), "..", "Examination_data_sample.py"
             )
             sample_path = os.path.abspath(sample_path)
-            with open(sample_path, "w", encoding="utf-8") as f:
+            with open(sample_path, "a", encoding="utf-8") as f:
                 f.write("Examination_data = ")
                 json.dump(data, f, ensure_ascii=False, indent=4)
                 f.write("\n")
