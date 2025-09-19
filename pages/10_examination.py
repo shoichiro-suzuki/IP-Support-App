@@ -136,52 +136,87 @@ def main():
         # --- introductionを条項リストの1つ目として表示 ---
         st.subheader("条文")
         # introduction部分
-        col_intro_num, col_intro_clause = st.columns([1, 9])
-        with col_intro_num:
-            st.text_input(
-                "条項番号",
-                value="前文",
-                key="exam_clause_number_intro",
-                disabled=True,
-            )
-        with col_intro_clause:
-            st.text_area(
-                "条文",
-                value=st.session_state.get("exam_intro", ""),
-                key="exam_clause_intro",
-                height="content",
-            )
-            # 審査結果（懸念事項）の表示（introduction用）
-            if st.session_state.get("analyzed_clauses"):
-                for analyzed in st.session_state["analyzed_clauses"]:
-                    if analyzed.get("clause_number") == "前文":
-                        call_analyze_function(analyzed)
-        st.markdown("---")
+        intro_analyzed = None
+        if st.session_state.get("analyzed_clauses"):
+            for analyzed in st.session_state["analyzed_clauses"]:
+                if analyzed.get("clause_number") == "前文":
+                    intro_analyzed = analyzed
+                    break
+
+        # expanderの展開状態を決定
+        intro_has_amendment = intro_analyzed and bool(
+            intro_analyzed.get("amendment_clause")
+        )
+        intro_expanded = bool(intro_has_amendment)  # 懸念事項があるときは展開状態
+
+        # expanderのラベルを決定
+        if intro_has_amendment:
+            intro_label = "前文 - ❌懸念事項あり"
+        else:
+            intro_label = "前文 - ✅懸念事項なし"
+
+        with st.expander(intro_label, expanded=intro_expanded):
+            col_intro_num, col_intro_clause = st.columns([1, 9])
+            with col_intro_num:
+                st.text_input(
+                    "条項番号",
+                    value="前文",
+                    key="exam_clause_number_intro",
+                    disabled=True,
+                )
+            with col_intro_clause:
+                st.text_area(
+                    "条文",
+                    value=st.session_state.get("exam_intro", ""),
+                    key="exam_clause_intro",
+                    height="content",
+                )
+                # 審査結果（懸念事項）の表示（introduction用）
+                if intro_analyzed:
+                    call_analyze_function(intro_analyzed)
 
         # 通常の条項リスト
         for idx, clause in enumerate(st.session_state["exam_clauses"]):
-            col_num, col_clause = st.columns([1, 9])
-            with col_num:
-                st.text_input(
-                    "条項番号",
-                    value=clause.get("clause_number", ""),
-                    key=f"exam_clause_number_{idx}",
-                )
-            with col_clause:
-                st.text_area(
-                    "条文",
-                    clause.get("clause", ""),
-                    key=f"exam_clause_{idx}",
-                    height="content",
-                )
+            # 対応する審査結果を検索
+            clause_analyzed = None
+            if st.session_state.get("analyzed_clauses"):
+                for analyzed in st.session_state["analyzed_clauses"]:
+                    if analyzed.get("clause_number") == clause.get("clause_number"):
+                        clause_analyzed = analyzed
+                        break
 
-                # 審査結果（懸念事項）の表示
-                if st.session_state.get("analyzed_clauses"):
-                    for analyzed in st.session_state["analyzed_clauses"]:
-                        if analyzed.get("clause_number") == clause.get("clause_number"):
-                            call_analyze_function(analyzed)
+            # expanderの展開状態を決定
+            clause_has_amendment = clause_analyzed and bool(
+                clause_analyzed.get("amendment_clause")
+            )
+            clause_expanded = bool(clause_has_amendment)  # 懸念事項があるときは展開状態
 
-            st.markdown("---")
+            # expanderのラベルを決定
+            clause_number = clause.get("clause_number", "")
+            if clause_has_amendment:
+                clause_label = f"{clause_number} - ❌懸念事項あり"
+            else:
+                clause_label = f"{clause_number} - ✅懸念事項なし"
+
+            with st.expander(clause_label, expanded=clause_expanded):
+                col_num, col_clause = st.columns([1, 9])
+                with col_num:
+                    st.text_input(
+                        "条項番号",
+                        value=clause.get("clause_number", ""),
+                        key=f"exam_clause_number_{idx}",
+                    )
+                with col_clause:
+                    st.text_area(
+                        "条文",
+                        clause.get("clause", ""),
+                        key=f"exam_clause_{idx}",
+                        height="content",
+                    )
+
+                    # 審査結果（懸念事項）の表示
+                    if clause_analyzed:
+                        call_analyze_function(clause_analyzed)
 
         def collect_exam_clauses():
             clauses = []
