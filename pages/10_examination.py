@@ -9,8 +9,148 @@ from api import async_llm_service
 from services.document_input import extract_text_from_document
 import tempfile
 import os
+from datetime import datetime
 
 st.set_page_config(layout="wide")
+
+
+def export_knowledge_to_csv(knowledge_data):
+    """
+    ナレッジデータをCSV形式に変換（BOM付きUTF-8）
+
+    Args:
+        knowledge_data: st.session_state["knowledge_all"]のデータ
+
+    Returns:
+        BOM付きUTF-8でエンコードされたCSVバイト文字列
+    """
+    import csv
+    import io
+
+    # CSVヘッダー定義（元データの構造に合わせて修正）
+    headers = [
+        "knowledge_number",
+        "version",
+        "contract_type",
+        "target_clause",
+        "knowledge_title",
+        "review_points",
+        "action_plan",
+        "clause_sample",
+        "record_status",
+        "approval_status",
+        "id",
+        "created_at",
+        "updated_at",
+    ]
+
+    # CSV書き込み処理
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=headers, quoting=csv.QUOTE_ALL)
+    writer.writeheader()
+
+    for knowledge in knowledge_data:
+        # データをクリーンアップしてCSV形式に適合させる
+        row = {}
+        for header in headers:
+            value = knowledge.get(header, "")
+            if isinstance(value, str):
+                # ダブルクォートを除去し、改行文字をスペースに変換
+                value = (
+                    value.strip('"')
+                    .replace("\n", " ")
+                    .replace("\r", "")
+                    .replace("\\n", " ")
+                )
+            row[header] = value
+        writer.writerow(row)
+
+    # BOM付きUTF-8でエンコード
+    csv_string = output.getvalue()
+    return csv_string.encode("utf-8-sig")
+
+
+def reset_review_status():
+    """審査状態をリセットする"""
+    st.session_state["clause_review_status"] = {}
+    if "analyzed_clauses" in st.session_state:
+        del st.session_state["analyzed_clauses"]
+
+
+def initialize_clause_status(clauses):
+    """条項リストから初期状態を設定"""
+    status_dict = {"前文": "unreviewed"}  # 前文を含む
+    for clause in clauses:
+        clause_number = clause.get("clause_number", "")
+        if clause_number:
+            status_dict[clause_number] = "unreviewed"
+    st.session_state["clause_review_status"] = status_dict
+
+
+def update_review_status_from_analysis(analyzed_clauses):
+    """審査結果から状態を更新"""
+    for analyzed in analyzed_clauses:
+        clause_number = analyzed.get("clause_number", "")
+        has_concern = bool(analyzed.get("amendment_clause"))
+
+        if clause_number in st.session_state["clause_review_status"]:
+            if has_concern:
+                st.session_state["clause_review_status"][
+                    clause_number
+                ] = "reviewed_concern"
+            else:
+                st.session_state["clause_review_status"][
+                    clause_number
+                ] = "reviewed_safe"
+
+
+def get_clause_label(clause_number, clause_review_status, analyzed_clauses=None):
+    """
+    条項番号と状態に基づいてexpanderラベルを生成
+
+    Args:
+        clause_number: 条項番号
+        clause_review_status: 審査状態辞書
+        analyzed_clauses: 審査結果リスト
+
+    Returns:
+        tuple: (ラベル文字列, 展開状態のbool)
+    """
+    status = clause_review_status.get(clause_number, "unreviewed")
+
+    if status == "unreviewed":
+        return f"{clause_number} - 🔍未審査", False
+    elif status == "reviewed_safe":
+        return f"{clause_number} - ✅懸念事項なし", False
+    elif status == "reviewed_concern":
+        return f"{clause_number} - ❌懸念事項あり", True
+
+    return f"{clause_number}", False
+
+
+def render_sidebar_controls():
+    """サイドバーに審査操作コントロールを表示"""
+    with st.sidebar:
+        st.header("審査操作")
+
+        # LLMモデル選択
+        llm_model = st.selectbox(
+            "LLMモデル",
+            [
+                "gpt-4.1",
+                "gpt-4.1-mini",
+                "gpt-5-mini",
+                "gpt-5-nano",
+                "gpt-5",
+            ],
+            key="sidebar_llm_model",
+        )
+
+        # 審査開始ボタン（条件付き表示）
+        if st.session_state["exam_page_status"] in ["document_loaded", "examination"]:
+            return st.button("審査開始", type="primary"), llm_model
+
+        return False, llm_model
 
 
 def main():
@@ -46,11 +186,24 @@ def main():
         st.session_state["exam_page_status"] = "start"
     if "no_target_knowledges" not in st.session_state:
         st.session_state["no_target_knowledges"] = []
+    if "clause_review_status" not in st.session_state:
+        st.session_state["clause_review_status"] = {}
+    if "last_uploaded_file" not in st.session_state:
+        st.session_state["last_uploaded_file"] = None
+
+    # サイドバーコントロールの表示
+    # sidebar_start_review, llm_model = render_sidebar_controls()
 
     # --- file upload -----------------------------------------------------------
     uploaded = st.file_uploader(
         "契約ファイル選択", type=[".docx", ".pdf"], accept_multiple_files=False
     )
+
+    # ファイル再読み込み時の状態リセット処理
+    if uploaded is not None and uploaded != st.session_state.get("last_uploaded_file"):
+        reset_review_status()
+        st.session_state["last_uploaded_file"] = uploaded
+
     if st.button("契約案から条文抽出", disabled=uploaded is None):
         if uploaded is not None:
             with st.spinner("解析中...", show_time=True):
@@ -83,11 +236,14 @@ def main():
                         )
                         st.success("解析完了")
                         st.session_state["exam_page_status"] = "document_loaded"
+                        # 条項状態を初期化
+                        initialize_clause_status(st.session_state["exam_clauses"])
                 except Exception as e:
                     st.error(f"解析に失敗しました: {e}")
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
+                    st.rerun()
         else:
             st.warning("ファイルを選択してください。")
     st.markdown("---")
@@ -150,10 +306,14 @@ def main():
         intro_expanded = bool(intro_has_amendment)  # 懸念事項があるときは展開状態
 
         # expanderのラベルを決定
+        intro_label, intro_expanded = get_clause_label(
+            "前文",
+            st.session_state["clause_review_status"],
+            st.session_state.get("analyzed_clauses"),
+        )
+        # 懸念事項がある場合は展開状態を上書き
         if intro_has_amendment:
-            intro_label = "前文 - ❌懸念事項あり"
-        else:
-            intro_label = "前文 - ✅懸念事項なし"
+            intro_expanded = True
 
         with st.expander(intro_label, expanded=intro_expanded):
             col_intro_num, col_intro_clause = st.columns([1, 9])
@@ -193,10 +353,14 @@ def main():
 
             # expanderのラベルを決定
             clause_number = clause.get("clause_number", "")
+            clause_label, clause_expanded = get_clause_label(
+                clause_number,
+                st.session_state["clause_review_status"],
+                st.session_state.get("analyzed_clauses"),
+            )
+            # 懸念事項がある場合は展開状態を上書き
             if clause_has_amendment:
-                clause_label = f"{clause_number} - ❌懸念事項あり"
-            else:
-                clause_label = f"{clause_number} - ✅懸念事項なし"
+                clause_expanded = True
 
             with st.expander(clause_label, expanded=clause_expanded):
                 col_num, col_clause = st.columns([1, 9])
@@ -236,70 +400,81 @@ def main():
                 )
             return clauses
 
-        # --- action buttons -------------------------------------------------------
-        llm_model = st.selectbox(
-            "LLMモデル",
-            [
-                "gpt-4.1",
-                "gpt-4.1-mini",
-                "gpt-5-mini",
-                "gpt-5-nano",
-                "gpt-5",
-            ],
-        )
-        exam_clicked = st.button("審査開始")
+        # --- action buttons (サイドバーに移動) -------------------------------------------------------
+        # サイドバーからの審査開始フラグをチェック
 
-        if exam_clicked:
-            contract_type = st.session_state["exam_contract_type"]
-            background_info = st.session_state["exam_background"]
-            partys = [
-                p.strip()
-                for p in st.session_state["exam_partys"].split(",")
-                if p.strip()
-            ]
-            title = st.session_state["exam_title"]
-            clauses = collect_exam_clauses()
-            # knowledgeとclauseのマッピング結果を取得
-            mapping_response, clauses_augmented, _ = asyncio.run(
-                async_llm_service.amatching_clause_and_knowledge(
-                    st.session_state["knowledge_all"], clauses
-                )
+        with st.sidebar:
+            st.header("審査操作")
+
+            # LLMモデル選択
+            llm_model = st.selectbox(
+                "LLMモデル",
+                [
+                    "gpt-4.1",
+                    "gpt-4.1-mini",
+                    "gpt-5-mini",
+                    "gpt-5-nano",
+                    "gpt-5",
+                ],
+                key="sidebar_llm_model",
             )
-            # 関連条項が無いナレッジを抽出
-            no_target_knowledges = []
-            for m in mapping_response:
-                if not m.get("clause_number"):
-                    kid = m["knowledge_id"]
-                    kn = next(
-                        (
-                            k
-                            for k in st.session_state["knowledge_all"]
-                            if str(k.get("id")) == str(kid)
-                        ),
-                        None,
+
+            # 審査開始ボタン（条件付き表示）
+            if st.button("審査開始", type="primary"):
+                with st.spinner("審査中...", show_time=True):
+                    contract_type = st.session_state["exam_contract_type"]
+                    background_info = st.session_state["exam_background"]
+                    partys = [
+                        p.strip()
+                        for p in st.session_state["exam_partys"].split(",")
+                        if p.strip()
+                    ]
+                    title = st.session_state["exam_title"]
+                    clauses = collect_exam_clauses()
+                    # knowledgeとclauseのマッピング結果を取得
+                    mapping_response, clauses_augmented, _ = asyncio.run(
+                        async_llm_service.amatching_clause_and_knowledge(
+                            st.session_state["knowledge_all"], clauses
+                        )
                     )
-                    if kn:
-                        no_target_knowledges.append(kn)
-            with st.spinner("審査中...", show_time=True):
-                try:
-                    analyzed_clauses = examination_api(
-                        contract_type=contract_type,
-                        background_info=background_info,
-                        partys=partys,
-                        title=title,
-                        clauses=clauses_augmented,
-                        knowledge_all=st.session_state["knowledge_all"],
-                        llm_model=llm_model,
-                    )
-                    if not analyzed_clauses:
-                        st.info("審査結果がありません。")
-                    else:
-                        st.session_state["analyzed_clauses"] = analyzed_clauses
-                        st.session_state["exam_page_status"] = "examination"
-                        st.session_state["no_target_knowledges"] = no_target_knowledges
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"審査処理でエラーが発生しました: {e}")
+                    # 関連条項が無いナレッジを抽出
+                    no_target_knowledges = []
+                    for m in mapping_response:
+                        if not m.get("clause_number"):
+                            kid = m["knowledge_id"]
+                            kn = next(
+                                (
+                                    k
+                                    for k in st.session_state["knowledge_all"]
+                                    if str(k.get("id")) == str(kid)
+                                ),
+                                None,
+                            )
+                            if kn:
+                                no_target_knowledges.append(kn)
+                    try:
+                        analyzed_clauses = examination_api(
+                            contract_type=contract_type,
+                            background_info=background_info,
+                            partys=partys,
+                            title=title,
+                            clauses=clauses_augmented,
+                            knowledge_all=st.session_state["knowledge_all"],
+                            llm_model=llm_model,
+                        )
+                        if not analyzed_clauses:
+                            st.info("審査結果がありません。")
+                        else:
+                            st.session_state["analyzed_clauses"] = analyzed_clauses
+                            # 審査結果から状態を更新
+                            update_review_status_from_analysis(analyzed_clauses)
+                            st.session_state["exam_page_status"] = "examination"
+                            st.session_state["no_target_knowledges"] = (
+                                no_target_knowledges
+                            )
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"審査処理でエラーが発生しました: {e}")
     if st.session_state["exam_page_status"] == "examination":
         st.success("審査結果を表示しました。")
         # 関連条項が無いナレッジを審査結果の後に表示
@@ -324,6 +499,59 @@ def main():
                         f"<b>■ 対応策</b>:<br>{kn.get('action_plan', '').replace(chr(10), '<br>')}",
                         unsafe_allow_html=True,
                     )
+        with st.sidebar:
+            now = str(datetime.now().strftime("%Y%m%d%H%M%S"))
+
+            # CSV出力用のデータを準備
+            def collect_exam_clauses_for_csv():
+                clauses = []
+                intro_clause = {
+                    "clause_number": "前文",
+                    "clause": st.session_state.get("exam_intro", ""),
+                }
+                clauses.append(intro_clause)
+                for idx in range(len(st.session_state["exam_clauses"])):
+                    clauses.append(
+                        {
+                            "clause_number": st.session_state.get(
+                                f"exam_clause_number_{idx}", ""
+                            ),
+                            "clause": st.session_state.get(f"exam_clause_{idx}", ""),
+                        }
+                    )
+                return clauses
+
+            csv_data = api.export_examination_result_to_csv(
+                analyzed_clauses=st.session_state.get("analyzed_clauses", []),
+                original_clauses=collect_exam_clauses_for_csv(),
+                contract_info={
+                    "title": st.session_state.get("exam_title", ""),
+                    "contract_type": st.session_state.get("exam_contract_type", ""),
+                    "partys": st.session_state.get("exam_partys", ""),
+                    "background": st.session_state.get("exam_background", ""),
+                },
+                clause_review_status=st.session_state.get("clause_review_status", {}),
+                examination_datetime=now,
+                llm_model=st.session_state.get("sidebar_llm_model", "gpt-4.1"),
+            )
+
+            st.download_button(
+                "審査結果 Download",
+                data=csv_data,
+                file_name=f"審査結果_{now}.csv",
+                mime="text/csv",
+            )
+
+            # ナレッジデータダウンロード機能
+            knowledge_csv_data = export_knowledge_to_csv(
+                st.session_state["knowledge_all"]
+            )
+            st.download_button(
+                "ナレッジ Download",
+                data=knowledge_csv_data,
+                file_name=f"ナレッジデータ_{now}.csv",
+                mime="text/csv",
+            )
 
 
 def call_analyze_function(analyzed):

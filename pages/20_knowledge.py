@@ -185,46 +185,6 @@ def main():
                 st.rerun()
         st.markdown("---")
 
-        # # ---- フィルタUI（入力のたびに反映）----
-        # st.markdown("#### フィルタ機能")
-        # contract_filter = st.selectbox(
-        #     "契約種別",
-        #     ["すべて"] + type_names,
-        #     key="contract_filter",
-        #     on_change=lambda: st.rerun(),
-        # )
-        # search_text = st.text_input(
-        #     "検索（番号/タイトル/本文に部分一致）",
-        #     key="q",
-        #     on_change=lambda: st.rerun(),
-        # )
-
-        # # 並び順（任意：番号降順/昇順）
-        # sort_key = st.selectbox(
-        #     "並び順", ["番号 降順", "番号 昇順"], index=1, on_change=lambda: st.rerun()
-        # )
-        # page_size = st.selectbox(
-        #     "1ページの件数",
-        #     [10, 20, 50],
-        #     index=[10, 20, 50].index(PAGE_SIZE_DEFAULT),
-        #     on_change=lambda: st.rerun(),
-        # )
-        # st.session_state["page_size"] = page_size
-
-        # # フィルタ適用
-        # base = st.session_state["knowledge_all"]
-        # filtered = apply_filters(base, contract_filter, search_text)
-
-        # # 並び替え
-        # reverse = sort_key == "番号 降順"
-        # filtered.sort(key=lambda k: int(k.get("knowledge_number", 0)), reverse=reverse)
-
-        # st.session_state["knowledge_filtered"] = filtered
-
-        # # 検索や件数を変えたら1ページ目へ
-        # if st.session_state.get("page", 1) != 1:
-        #     st.session_state["page"] = 1
-
     # ---- 右ペイン：詳細フォーム（あなたの既存コードほぼ流用）----
     with right_col:
         selected = st.session_state.get("selected")
