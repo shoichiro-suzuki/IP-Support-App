@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from api.knowledge_api import KnowledgeAPI
 import io
+from services.admin_auth import check_admin_auth, show_admin_sidebar
 
 st.set_page_config(layout="wide", page_title="ナレッジ管理")
 
@@ -81,6 +82,7 @@ def convert_df_to_knowledge(df):
 
 
 def main():
+    show_admin_sidebar()
     st.title("ナレッジ管理")
 
     if "knowledge_api" not in st.session_state:
@@ -131,7 +133,7 @@ def main():
         column_config = {
             "id": st.column_config.TextColumn("ID", disabled=True),  # IDは編集不可
             "knowledge_number": st.column_config.NumberColumn(
-                "ナレッジNo", format="%d"
+                "ナレッジNo", format="%d", disabled=True
             ),
             "version": st.column_config.NumberColumn("バージョン", format="%d"),
             "contract_type": st.column_config.SelectboxColumn(
@@ -155,12 +157,13 @@ def main():
         edited_df = st.data_editor(
             df,
             column_config=column_config,
-            num_rows="dynamic",
+            num_rows="fixed",
             height=600,
         )
 
         # 一括更新ボタン
-        if st.button("一括更新", type="primary"):
+        is_admin = check_admin_auth()
+        if st.button("一括更新", type="primary", disabled=not is_admin):
             try:
                 # DataFrameをナレッジデータに変換
                 updated_knowledge_list = convert_df_to_knowledge(edited_df)
@@ -203,8 +206,8 @@ def main():
             except Exception as e:
                 st.error(f"一括更新に失敗しました: {e}")
         st.write(
-            """レコード(行)の追加が可能です。\n
-レコードの削除は、個別のナレッジ詳細画面で削除してください。"""
+            """レコード(行)の編集が可能です。\n
+レコードの追加・削除は、個別のナレッジ詳細画面で行ってください。"""
         )
     else:
         st.info("編集できるデータがありません。")

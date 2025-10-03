@@ -3,6 +3,7 @@ import streamlit as st
 from api.knowledge_api import KnowledgeAPI
 from collections import deque
 import math
+from services.admin_auth import check_admin_auth, show_admin_sidebar
 
 st.set_page_config(layout="wide")
 
@@ -79,6 +80,7 @@ def show_delete_dialog():
 
 
 def main():
+    show_admin_sidebar()
     st.title("ナレッジ管理")
     if "knowledge_api" not in st.session_state:
         st.session_state["knowledge_api"] = KnowledgeAPI()
@@ -131,7 +133,8 @@ def main():
         st.session_state["page"] = page
 
         # ---- 新規追加 ----
-        if st.button("新規追加", use_container_width=True):
+        is_admin = check_admin_auth()
+        if st.button("新規追加", use_container_width=True, disabled=not is_admin):
             st.session_state["knowledge_page_status"] = "new"
             try:
                 new_number = api.get_max_knowledge_number() + 1
@@ -237,15 +240,17 @@ def main():
                     height="content",
                 )
 
+                is_admin = check_admin_auth()
                 col1, col2 = st.columns(2)
                 with col1:
-                    save_btn = st.form_submit_button("保存")
+                    save_btn = st.form_submit_button("保存", disabled=not is_admin)
                 with col2:
                     delete_btn = st.form_submit_button(
                         "削除",
                         disabled=(
                             st.session_state.get("knowledge_page_status") == "new"
-                        ),
+                        )
+                        or not is_admin,
                     )
 
             if save_btn:
