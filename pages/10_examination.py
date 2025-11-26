@@ -2,11 +2,14 @@
 
 import streamlit as st
 import asyncio
+import json
 from api.contract_api import ContractAPI
 from api.knowledge_api import KnowledgeAPI
 from api.examination_api import examination_api
 from api import async_llm_service
 from services.document_input import extract_text_from_document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 import tempfile
 import os
 from datetime import datetime
@@ -128,6 +131,67 @@ def get_clause_label(clause_number, clause_review_status, analyzed_clauses=None)
     return f"{clause_number}", False
 
 
+def build_chat_context():
+    """チャット用に必要なコンテキストを収集（対象条文/審査結果/ナレッジ/契約基本情報を生データで付与）"""
+    clauses = [
+        {
+            "clause_number": "前文",
+            "clause": st.session_state.get("exam_intro", ""),
+        }
+    ]
+    for idx, clause in enumerate(st.session_state.get("exam_clauses", [])):
+        clauses.append(
+            {
+                "clause_number": st.session_state.get(
+                    f"exam_clause_number_{idx}", clause.get("clause_number", "")
+                ),
+                "clause": st.session_state.get(
+                    f"exam_clause_{idx}", clause.get("clause", "")
+                ),
+            }
+        )
+
+    return {
+        "contract_info": {
+            "title": st.session_state.get("exam_title", ""),
+            "contract_type": st.session_state.get("exam_contract_type", ""),
+            "partys": st.session_state.get("exam_partys", ""),
+            "background": st.session_state.get("exam_background", ""),
+        },
+        "clauses": clauses,
+        "analysis": st.session_state.get("analyzed_clauses", []),
+        "knowledge": st.session_state.get("knowledge_all", []),
+    }
+
+
+async def run_examination_chat(prompt: str, llm_model: str) -> str:
+    """サイドバーでの審査チャット呼び出し"""
+    context = build_chat_context()
+    system_prompt = (
+        "あなたは契約審査アシスタントです。"
+        "以下のコンテキスト（対象条文、審査結果、ナレッジ、契約基本情報）が全てです。"
+        "コンテキストに含まれない前提は置かず、日本語で回答してください。"
+    )
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("human", "質問:\n{question}\n\nコンテキスト:\n{context_json}"),
+        ]
+    )
+    chain = (
+        prompt_template
+        | async_llm_service.get_llm(llm_model)
+        | StrOutputParser()
+    )
+    return await async_llm_service.ainvoke_with_limit(
+        chain,
+        {
+            "question": prompt,
+            "context_json": json.dumps(context, ensure_ascii=False),
+        },
+    )
+
+
 def render_sidebar_controls():
     """サイドバーに審査操作コントロールを表示"""
     with st.sidebar:
@@ -190,6 +254,8 @@ def main():
         st.session_state["clause_review_status"] = {}
     if "last_uploaded_file" not in st.session_state:
         st.session_state["last_uploaded_file"] = None
+    if "exam_chat_history" not in st.session_state:
+        st.session_state["exam_chat_history"] = []
 
     # サイドバーコントロールの表示
     # sidebar_start_review, llm_model = render_sidebar_controls()
@@ -493,6 +559,24 @@ def main():
                             st.rerun()
                     except Exception as e:
                         st.error(f"審査処理でエラーが発生しました: {e}")
+            st.markdown("---")
+            st.subheader("審査チャット")
+            chat_box = st.container(border=True)
+            for msg in st.session_state["exam_chat_history"]:
+                chat_box.chat_message(msg["role"]).write(msg["content"])
+
+            if prompt := st.chat_input("質問を入力", key="exam_chat_input"):
+                st.session_state["exam_chat_history"].append(
+                    {"role": "user", "content": prompt}
+                )
+                try:
+                    reply = asyncio.run(run_examination_chat(prompt, llm_model))
+                except Exception as e:
+                    reply = f"エラーが発生しました: {e}"
+                st.session_state["exam_chat_history"].append(
+                    {"role": "assistant", "content": reply}
+                )
+                st.rerun()
     if st.session_state["exam_page_status"] == "examination":
         st.success("審査結果を表示しました。")
         # 関連条項が無いナレッジを審査結果の後に表示
