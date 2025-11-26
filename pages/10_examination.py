@@ -252,6 +252,11 @@ def main():
         st.session_state["exam_page_status"] == "document_loaded"
         or st.session_state["exam_page_status"] == "examination"
     ):
+        # ナレッジ未ロード時は続行しない
+        if not st.session_state.get("knowledge_all"):
+            st.error("ナレッジが取得できませんでした。再読み込み後も改善しない場合は接続設定を確認してください。")
+            return
+
         col_partys, col_contract_type = st.columns([2, 1])
         # --- contract type ---------------------------------------------------------
         with col_contract_type:
@@ -432,11 +437,24 @@ def main():
                     title = st.session_state["exam_title"]
                     clauses = collect_exam_clauses()
                     # knowledgeとclauseのマッピング結果を取得
-                    mapping_response, clauses_augmented, _ = asyncio.run(
-                        async_llm_service.amatching_clause_and_knowledge(
-                            st.session_state["knowledge_all"], clauses
+                    try:
+                        mapping_response, clauses_augmented, _ = asyncio.run(
+                            async_llm_service.amatching_clause_and_knowledge(
+                                st.session_state["knowledge_all"], clauses
+                            )
                         )
+                    except Exception as e:
+                        st.error(f"ナレッジマッピングでエラーが発生しました: {e}")
+                        return
+
+                    # マッピング結果が全て空なら警告して終了
+                    mapped_total = sum(
+                        len(m.get("clause_number", [])) for m in mapping_response or []
                     )
+                    if mapped_total == 0:
+                        st.warning("ナレッジと条項の対応付けができませんでした。対象条項条件や入力条文を確認してください。")
+                        return
+
                     # 関連条項が無いナレッジを抽出
                     no_target_knowledges = []
                     for m in mapping_response:
