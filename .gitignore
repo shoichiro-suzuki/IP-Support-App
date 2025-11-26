@@ -7,8 +7,6 @@ logs/
 old_pyside6/
 Examination_data_sample.py
 match_cl_and_kn.json
-*.md
-images/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
