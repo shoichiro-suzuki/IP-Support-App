@@ -3,6 +3,7 @@ import streamlit as st
 from api.knowledge_api import KnowledgeAPI
 from collections import deque
 import math
+import json
 from services.admin_auth import check_admin_auth, show_admin_sidebar
 
 st.set_page_config(layout="wide")
@@ -85,6 +86,7 @@ def main():
     if "knowledge_api" not in st.session_state:
         st.session_state["knowledge_api"] = KnowledgeAPI()
     api = st.session_state["knowledge_api"]
+    is_admin = check_admin_auth()
 
     # ---------------- 初期ロードと状態 ----------------
     if "knowledge_all" not in st.session_state:
@@ -133,7 +135,6 @@ def main():
         st.session_state["page"] = page
 
         # ---- 新規追加 ----
-        is_admin = check_admin_auth()
         if st.button("新規追加", use_container_width=True, disabled=not is_admin):
             st.session_state["knowledge_page_status"] = "new"
             try:
@@ -187,6 +188,39 @@ def main():
                 st.session_state["page"] = max_page
                 st.rerun()
         st.markdown("---")
+
+        with st.expander("JSONインポート（承認済みファイル）", expanded=False):
+            uploaded = st.file_uploader(
+                "knowledge_entry JSON", type=["json"], key="knowledge_import_file"
+            )
+            force_vec = st.checkbox("ベクトルを再生成して保存する", value=True)
+            if st.button(
+                "インポート実行",
+                type="primary",
+                disabled=not (is_admin and uploaded),
+                use_container_width=True,
+            ):
+                try:
+                    payload = json.load(uploaded)
+                    items = payload if isinstance(payload, list) else payload.get("items")
+                    if not items or not isinstance(items, list):
+                        raise ValueError("配列形式のナレッジデータを含むJSONを指定してください。")
+                    saved_count = 0
+                    for item in items:
+                        saved = api.save_knowledge(item)
+                        if force_vec:
+                            api.add_vectors_to_knowledge(saved, force=True)
+                        saved_count += 1
+                    st.success(f"{saved_count}件を取り込みました。")
+                    st.session_state["knowledge_all"] = api.get_knowledge_list()
+                    st.session_state["knowledge_filtered"] = apply_filters(
+                        st.session_state["knowledge_all"],
+                        st.session_state.get("contract_filter", "すべて"),
+                        st.session_state.get("q", ""),
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"インポートに失敗しました: {e}")
 
     # ---- 右ペイン：詳細フォーム（あなたの既存コードほぼ流用）----
     with right_col:
@@ -269,7 +303,8 @@ def main():
                 # （各フォーム値でdataを更新）
                 try:
                     saved = api.save_knowledge(data)
-                    st.session_state["selected"] = saved
+                    with_vectors = api.add_vectors_to_knowledge(saved, force=True)
+                    st.session_state["selected"] = with_vectors or saved
                     st.session_state["knowledge_all"] = api.get_knowledge_list()
                     # フィルタリングされたリストを更新
                     st.session_state["knowledge_filtered"] = apply_filters(

@@ -3,11 +3,7 @@ from azure_.openai_service import AzureOpenAIService
 from typing import List, Dict, Optional
 import uuid
 from datetime import datetime, timedelta, timezone
-
-
-from datetime import datetime, timedelta, timezone
 from api.contract_api import ContractAPI
-
 
 JST = timezone(timedelta(hours=9))
 
@@ -95,13 +91,10 @@ class KnowledgeAPI:
         if "id" not in knowledge_data:
             knowledge_data["id"] = str(uuid.uuid4())
 
-        JST = timezone(timedelta(hours=9))
         now_jst = datetime.now(JST)
 
         # 既存データがあればcreated_atを引き継ぐ
-        existing = None
-        if "id" in knowledge_data:
-            existing = self.get_knowledge_by_id(knowledge_data["id"])
+        existing = self.get_knowledge_by_id(knowledge_data["id"])
         if existing and "created_at" in existing:
             knowledge_data["created_at"] = existing["created_at"]
         else:
@@ -113,6 +106,66 @@ class KnowledgeAPI:
             data=knowledge_data,
             database_name="CONTRACT",
         )
+
+    def add_vectors_to_knowledge(
+        self, knowledge_data: Dict, force: bool = False
+    ) -> Dict | None:
+        """
+        ナレッジ1件にベクトルフィールドを付与して保存する。
+
+        Args:
+            knowledge_data: ナレッジレコード
+            force: 既存ベクトルがあっても上書きする場合 True
+        Returns:
+            更新後のレコード。入力が空でベクトル生成できない場合は None
+        """
+
+        def _embed_if_needed(field: str, text: str | None):
+            if not text or not str(text).strip():
+                return None
+            if not force and knowledge_data.get(field):
+                return None
+            return self.openai_service.get_emb_3_small(text)
+
+        updates = {}
+        clause_vec = _embed_if_needed(
+            "clause_sample_vector", knowledge_data.get("clause_sample")
+        )
+        risk_vec = _embed_if_needed(
+            "risk_description_vector", knowledge_data.get("review_points")
+        )
+        action_vec = _embed_if_needed(
+            "action_plan_vector", knowledge_data.get("action_plan")
+        )
+        if clause_vec is not None:
+            updates["clause_sample_vector"] = clause_vec
+        if risk_vec is not None:
+            updates["risk_description_vector"] = risk_vec
+        if action_vec is not None:
+            updates["action_plan_vector"] = action_vec
+
+        if not updates:
+            return None
+
+        knowledge_data.update(updates)
+        return self.save_knowledge(knowledge_data)
+
+    def backfill_vectors(self, force: bool = False, limit: int | None = None):
+        """
+        既存knowledge_entryにベクトルフィールドを付与して保存する。
+        """
+        records = self.get_knowledge_list()
+        if limit:
+            records = records[:limit]
+        updated = 0
+        skipped = 0
+        for rec in records:
+            res = self.add_vectors_to_knowledge(rec, force=force)
+            if res:
+                updated += 1
+            else:
+                skipped += 1
+        return {"updated": updated, "skipped": skipped, "total": len(records)}
 
     def delete_knowledge(self, knowledge_data: Dict) -> Dict:
         """
