@@ -264,6 +264,8 @@ def main():
         st.session_state["exam_intro"] = ""
     if "exam_page_status" not in st.session_state:
         st.session_state["exam_page_status"] = "start"
+    if "exam_chat_history" not in st.session_state:
+        st.session_state["exam_chat_history"] = []
     if "no_target_knowledges" not in st.session_state:
         st.session_state["no_target_knowledges"] = []
     if "clause_review_status" not in st.session_state:
