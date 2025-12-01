@@ -55,18 +55,43 @@ sem = get_llm_semaphore()
 # LangChain用: セマフォ+バックオフ付き非同期呼び出し
 async def ainvoke_with_limit(chain: Runnable, inp: dict | str) -> str:
     delay = 0.5
+    last_error = None
     async with sem:
         for _ in range(5):
             try:
                 variables = {"input": inp} if isinstance(inp, str) else inp
                 return await chain.ainvoke(variables)
             except Exception as e:
+                last_error = e
                 msg = str(e).lower()
+
+                # トークン制限超過エラーの判定
+                if any(keyword in msg for keyword in [
+                    "context_length_exceeded",
+                    "maximum context length",
+                    "token limit",
+                    "too many tokens",
+                    "tokens exceeded",
+                    "max_tokens",
+                ]):
+                    raise Exception(
+                        f"トークン制限超過エラー: 入力データが大きすぎます。\n"
+                        f"詳細: {str(e)}"
+                    )
+
+                # レート制限またはタイムアウトエラーの判定
                 if "429" in msg or "timeout" in msg or "temporarily" in msg:
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 8)
                 else:
+                    # その他のエラーは即座に再送出
                     raise
+
+    # 全てのリトライが失敗した場合
+    raise Exception(
+        f"LLM API呼び出しが5回のリトライ後も失敗しました (レート制限またはタイムアウト)\n"
+        f"最後のエラー: {str(last_error)}"
+    )
 
 
 async def run_batch_reviews(

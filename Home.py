@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(page_title="IP Support App", layout="wide", page_icon="📜")
 
 st.title("契約審査サポートアプリ📜")
-st.markdown("<div style='text-align: right'>Ver. 0.7</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: right'>Ver. 1.0</div>", unsafe_allow_html=True)
 # st.page_link("pages/new_contract.py", label="契約登録・修正", icon="📝")
 st.page_link("pages/10_examination.py", label="契約審査", icon="🔍")
 # st.page_link("pages/view_contract.py", label="契約閲覧", icon="📄")
