@@ -151,6 +151,22 @@ def build_chat_context():
             }
         )
 
+    # ナレッジから必要なフィールドのみを抽出（ベクトルデータを除外）
+    knowledge_all = st.session_state.get("knowledge_all", [])
+    essential_fields = [
+        "knowledge_number",
+        "contract_type",
+        "target_clause",
+        "knowledge_title",
+        "review_points",
+        "action_plan",
+        "clause_sample",
+    ]
+    filtered_knowledge = [
+        {field: kn.get(field, "") for field in essential_fields}
+        for kn in knowledge_all
+    ]
+
     return {
         "contract_info": {
             "title": st.session_state.get("exam_title", ""),
@@ -160,7 +176,7 @@ def build_chat_context():
         },
         "clauses": clauses,
         "analysis": st.session_state.get("analyzed_clauses", []),
-        "knowledge": st.session_state.get("knowledge_all", []),
+        "knowledge": filtered_knowledge,
     }
 
 
@@ -561,6 +577,12 @@ def main():
                         st.error(f"審査処理でエラーが発生しました: {e}")
             st.markdown("---")
             st.subheader("審査チャット")
+
+            # チャット履歴リセットボタン
+            if st.button("🗑️ 履歴リセット", help="チャット履歴をクリアします"):
+                st.session_state["exam_chat_history"] = []
+                st.rerun()
+
             chat_box = st.container(border=True)
             for msg in st.session_state["exam_chat_history"]:
                 chat_box.chat_message(msg["role"]).write(msg["content"])
@@ -571,6 +593,9 @@ def main():
                 )
                 try:
                     reply = asyncio.run(run_examination_chat(prompt, llm_model))
+                    # None チェック（防御的処理）
+                    if reply is None:
+                        reply = "エラーが発生しました: LLMからの応答がありませんでした"
                 except Exception as e:
                     reply = f"エラーが発生しました: {e}"
                 st.session_state["exam_chat_history"].append(
