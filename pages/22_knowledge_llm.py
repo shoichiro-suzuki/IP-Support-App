@@ -3,7 +3,7 @@ import json
 import streamlit as st
 from api.knowledge_api import KnowledgeAPI
 
-st.set_page_config(page_title="ナレッジ生成/修正（LLMモック）", layout="wide")
+st.set_page_config(page_title="ナレッジ生成/修正（LLMモック-開発中）", layout="wide")
 
 # データロード
 if "knowledge_api" not in st.session_state:
@@ -103,95 +103,115 @@ with tab_select:
     st.session_state["knowledge_llm_selected"] = list(selected_ids)
 
 with tab_generate:
-    st.subheader("入力コンテキスト")
-    col1, col2 = st.columns(2)
-    contract_title = col1.text_input("契約タイトル", placeholder="〇〇基本契約")
-    contract_type = col1.text_input("契約種別", value="汎用")
-    parties = col2.text_input("当事者", placeholder="甲: A社 / 乙: B社")
-    background = col2.text_area("背景", height=80)
-
-    clause_number = st.text_input("対象条文番号", placeholder="例: 第10条（責任）")
-    clause_body = st.text_area("対象条文本文", height=160)
-
+    # サイドバー: 選択済みナレッジと生成結果
     selected_items = [
         k
         for k in st.session_state["knowledge_all"]
         if k.get("id") in st.session_state.get("knowledge_llm_selected", [])
     ]
-    ref_note = st.text_area("参考ナレッジ追加入力（任意）", height=120)
-
-    st.caption("選択済みナレッジ（コピー用JSON）")
-    st.code(
-        json.dumps(
-            [
-                {
-                    "knowledge_number": k.get("knowledge_number"),
-                    "knowledge_title": k.get("knowledge_title"),
-                    "target_clause": k.get("target_clause"),
-                    "review_points": k.get("review_points"),
-                    "action_plan": k.get("action_plan"),
-                    "clause_sample": k.get("clause_sample"),
-                }
-                for k in selected_items
-            ],
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-    system_prompt = (
-        "あなたは契約ナレッジ編集者。入力コンテキストのみを根拠に既存フォーマットでドラフトを返す。\n"
-        "推測/補完禁止。足りない項目は空文字。日本語で簡潔に。前置き/結論は不要。"
-    )
-    contract_info = {
-        "title": contract_title,
-        "contract_type": contract_type,
-        "parties": parties,
-        "background": background,
-    }
-    clauses = [{"number": clause_number, "text": clause_body}]
-    knowledge_refs = {"selected": selected_items} if selected_items else {}
-    if ref_note.strip():
-        knowledge_refs["notes"] = ref_note.strip()
-
-    user_prompt = (
-        "以下コンテキストを踏まえ、ナレッジ下書きをJSONで返して。説明文やコードブロックは不要。\n"
-        "[契約基本情報]\n"
-        f"{json.dumps(contract_info, ensure_ascii=False, indent=2)}\n"
-        "[対象条文]\n"
-        f"{json.dumps(clauses, ensure_ascii=False, indent=2)}\n"
-        "[参考ナレッジ（任意）]\n"
-        f"{json.dumps(knowledge_refs or {}, ensure_ascii=False, indent=2)}"
-    )
-
-    st.markdown("---")
-    st.subheader("LLM送信用プロンプト（プレビュー）")
-    st.markdown("**System**")
-    st.code(system_prompt)
-    st.markdown("**User**")
-    st.code(user_prompt)
-
-    st.markdown("---")
-    st.subheader("生成結果（モック）")
-    if st.button("下書きをモック生成"):
-        target_clause = (
-            f"{clause_number} {clause_body}".strip()
-            if clause_number or clause_body
-            else ""
-        )
-        review_points = "- 条文要件と契約背景の整合性を確認（モック）"
-        if background:
-            review_points += f"\n- 背景: {background}"
-        action_plan = "- 条文案を調整し、当事者と整合を確認（モック）"
-        if ref_note:
-            action_plan += "\n- 参考ナレッジに基づき差分チェック"
-        draft = {
-            "knowledge_title": contract_title or "ドラフトタイトル（モック）",
-            "target_clause": target_clause,
-            "review_points": review_points,
-            "action_plan": action_plan,
-            "clause_sample": clause_body[:200]
-            or "修正文案をここに追記（モック）",
-            "contract_type": contract_type or "汎用",
+    selected_export = [
+        {
+            "contract_type": k.get("contract_type"),
+            "target_clause": k.get("target_clause"),
+            "knowledge_title": k.get("knowledge_title"),
+            "review_points": k.get("review_points"),
+            "action_plan": k.get("action_plan"),
+            "clause_sample": k.get("clause_sample"),
         }
-        st.json(draft)
+        for k in selected_items
+    ]
+    sidebar = st.sidebar
+    sidebar.subheader("選択済みナレッジ")
+    for idx, k in enumerate(selected_export):
+        label = f"選択ナレッジ {idx+1}: {k.get('knowledge_title','')}"
+        with sidebar.expander(label, expanded=False):
+            st.markdown(f"**契約種別**: {k.get('contract_type','')}")
+            st.markdown(f"**対象条項**: {k.get('target_clause','')}")
+            st.markdown(f"**審査観点**: {k.get('review_points','')}")
+            st.markdown(f"**対応策**: {k.get('action_plan','')}")
+            st.markdown(f"**条項サンプル**: {k.get('clause_sample','')}")
+
+    sidebar.markdown("---")
+    sidebar.subheader("ナレッジ生成結果（モック）")
+    last_user_msg = next(
+        (
+            m
+            for m in reversed(st.session_state.get("knowledge_chat", []))
+            if m["role"] == "user"
+        ),
+        None,
+    )
+    if sidebar.button("ナレッジ再生成（モック）"):
+        user_hint = last_user_msg["content"] if last_user_msg else ""
+        file_texts = last_user_msg.get("file_texts", []) if last_user_msg else []
+        merged_files = "\n".join(t[:200] for t in file_texts if t)
+        merged_clause = (merged_files + "\n" + user_hint).strip()
+        draft = {
+            "knowledge_title": (
+                (
+                    last_user_msg.get("file_names", [None])[0]
+                    or "ドラフトタイトル（モック）"
+                )
+                if last_user_msg
+                else "ドラフトタイトル（モック）"
+            ),
+            "target_clause": merged_clause,
+            "review_points": "- チャット指示と添付に基づき審査観点を整理（モック）",
+            "action_plan": "- 修正方針を踏まえて条文案を更新（モック）",
+            "clause_sample": merged_clause or "修正文案をここに追記（モック）",
+            "contract_type": (
+                selected_export[0].get("contract_type") if selected_export else "汎用"
+            ),
+        }
+        if user_hint:
+            draft["review_points"] += f"\n- 指示: {user_hint[:200]}"
+        if selected_export:
+            draft["action_plan"] += "\n- 既存ナレッジとの差分を確認"
+        sidebar.json(draft)
+
+    # メイン: チャット欄
+    st.subheader("チャット（修正方針入力）")
+    st.caption("st.chat_inputでテキスト/添付を送信（LLMモック）")
+
+    st.session_state.setdefault("knowledge_chat", [])
+
+    for msg in st.session_state["knowledge_chat"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("file_names"):
+                st.caption(f"添付: {', '.join(msg['file_names'])}")
+
+    submission = st.chat_input(
+        "修正方針や追加入力を送信（添付可）",
+        accept_file=True,
+        file_type=["txt", "md", "pdf", "docx"],
+    )
+    if submission:
+        if isinstance(submission, str):
+            user_text = submission
+            files = []
+        else:
+            user_text = getattr(submission, "text", "") or ""
+            files = getattr(submission, "files", []) or []
+        file_names = [f.name for f in files]
+        file_texts = []
+        for f in files:
+            try:
+                file_texts.append(f.getvalue().decode("utf-8", errors="ignore"))
+            except Exception:
+                file_texts.append("")
+        st.session_state["knowledge_chat"].append(
+            {
+                "role": "user",
+                "content": user_text or "",
+                "file_names": file_names,
+                "file_texts": file_texts,
+            }
+        )
+        st.session_state["knowledge_chat"].append(
+            {
+                "role": "assistant",
+                "content": "LLMモック: 指示を受領しました。サイドバーで再生成してください。",
+            }
+        )
+        st.rerun()
