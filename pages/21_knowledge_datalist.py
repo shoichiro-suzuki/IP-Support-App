@@ -177,8 +177,7 @@ def main():
 
                 for i, knowledge in enumerate(updated_knowledge_list):
                     try:
-                        saved = api.save_knowledge(knowledge)
-                        api.add_vectors_to_knowledge(saved, force=True)
+                        api.save_knowledge(knowledge)
                         success_count += 1
                     except Exception as e:
                         st.warning(
