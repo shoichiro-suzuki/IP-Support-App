@@ -127,7 +127,7 @@ def extract_texts(files) -> List[str]:
     for f in files:
         try:
             ext = Path(f.name).suffix.lower()
-            if ext == ".pdf":
+            if ext in (".pdf", ".docx"):
                 tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
                 tmp.write(f.getvalue())
                 tmp.flush()
