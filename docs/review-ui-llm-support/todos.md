@@ -1,8 +1,6 @@
 # ToDo
-- [ ] 審査結果チャット仕様策定（コンテキスト構成/モデル選択/履歴保持）
-- [ ] UI設計: 審査ページへのチャットパネル配置（レイアウト案、権限制御）
-- [ ] ナレッジ生成プロンプト/出力フォーマット定義（既存項目に合わせる）
-- [ ] 新規ページ実装案作成（22_knowledge_llm.py 仮）と遷移導線検討
-- [ ] API/サービス拡張設計（チャット用LLMラッパ、ナレッジ保存フロー、エラーハンドリング）
-- [ ] ログ/監査・権限ポリシー決定（管理者のみの操作範囲、操作ログ先）
-- [ ] テスト計画策定（LLM応答モック化、UI動作確認項目）
+- [x] `pages/22_knowledge_llm.py` にナレッジ創出チャットUIとプロンプトフロー実装（テキスト+契約書入力）
+- [ ] `docs/review-ui-llm-support/llm_json_guardrail_design.md` に沿った JSON 固定（control/state/assistant_message/knowledge_json）、response_format+スキーマバリデーション+リトライ実装
+- [ ] 抽出結果を `knowledge_title` などCosmosDBスキーマへ整形し、同ページでJSONダウンロード可能にする（`pages/22_knowledge_llm.py`）
+- [ ] JSONアップロードで `knowledge_number` 採番しCosmosDBへ登録（`pages/20_knowledge.py`、`configs/knowledge_llm/knowledge_llm_entry.schema.json` 検証）
+- [ ] 入力バリデーション・エラーハンドリング・動作確認（UI/DB）

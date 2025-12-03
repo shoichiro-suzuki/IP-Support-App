@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KnowledgeLLMEntry",
+  "type": "object",
+  "required": [
+    "contract_type",
+    "knowledge_title",
+    "target_clause",
+    "review_points",
+    "action_plan",
+    "clause_sample"
+  ],
+  "properties": {
+    "contract_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "契約種別（秘密保持/共同開発/業務委託/売買/取引基本など）"
+    },
+    "knowledge_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "description": "端的なタイトル（目安20文字程度）"
+    },
+    "target_clause": {
+      "type": "string",
+      "minLength": 1,
+      "description": "対象条項の種類・見出し"
+    },
+    "review_points": {
+      "type": "string",
+      "minLength": 1,
+      "description": "契約審査で意識すべき観点"
+    },
+    "action_plan": {
+      "type": "string",
+      "minLength": 1,
+      "description": "次回以降の判断・コメントの具体方針"
+    },
+    "clause_sample": {
+      "type": "string",
+      "description": "推奨条文例またはコメント例（無ければ空文字）"
+    }
+  },
+  "additionalProperties": false
+}

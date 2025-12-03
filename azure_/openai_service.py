@@ -35,48 +35,6 @@ class AzureOpenAIService:
         )
         return response
 
-    def get_openai_response_o1(self, messages):
-        response = self.client.chat.completions.create(
-            model="o1",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        return answer
-
-    def get_openai_response_o1_mini(self, messages):
-        response = self.client.chat.completions.create(
-            model="o1-mini",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        return answer
-
-    def get_openai_response_o3_mini(self, messages):
-        response = self.client.chat.completions.create(
-            model="o3-mini",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        return answer
-
-    def get_openai_response_o3(self, messages):
-        response = self.client.chat.completions.create(
-            model="o3",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        return answer
-
-    def get_openai_response_o4_mini(self, messages):
-        response = self.client.chat.completions.create(
-            messages=messages,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
-            model="o4-mini",
-        )
-        answer = response.choices[0].message.content
-        return answer
-
     def get_openai_response_gpt41(self, messages):
         response = self.client.chat.completions.create(
             messages=messages,
@@ -150,7 +108,13 @@ class AzureOpenAIService:
         response = self.client.chat.completions.create(
             model="gpt-5-chat",
             messages=messages,
-            temperature=0.0,
+        )
+        answer = response.choices[0].message.content
+        return answer
+
+    def get_openai_response_gpt51_chat(self, messages, format=None):
+        response = self.client.chat.completions.create(
+            model="gpt-5.1-chat", messages=messages, response_format=format
         )
         answer = response.choices[0].message.content
         return answer
@@ -166,12 +130,8 @@ def test():
     ]
     max_tokens = 1000
     try:
-        answer, input_tokens, output_tokens = service.get_openai_response_o3_mini(
-            messages, max_tokens
-        )
+        answer = service.get_openai_response_gpt51_chat(messages)
         print("Response:", answer)
-        print("Input Tokens:", input_tokens)
-        print("Output Tokens:", output_tokens)
     except Exception as e:
         print("Error:", e)
 

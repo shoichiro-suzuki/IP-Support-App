@@ -1,188 +1,402 @@
-import json
+import json, os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 import streamlit as st
+from jsonschema import Draft202012Validator, ValidationError
+
 from api.knowledge_api import KnowledgeAPI
+from azure_.openai_service import AzureOpenAIService
+from services.document_input import extract_text_from_document
 
-st.set_page_config(page_title="ナレッジ生成/修正（LLMモック-開発中）", layout="wide")
+st.set_page_config(page_title="ナレッジ創出（LLM）", layout="wide")
 
-# データロード
-if "knowledge_api" not in st.session_state:
-    st.session_state["knowledge_api"] = KnowledgeAPI()
-if "knowledge_all" not in st.session_state:
+FIELDS = [
+    "contract_type",
+    "knowledge_title",
+    "target_clause",
+    "review_points",
+    "action_plan",
+    "clause_sample",
+]
+
+PROMPT_FILES = {
+    "A: 深掘り重視（system_prompt_A.md）": Path("prompts/system_prompt_A.md"),
+    "B: 汎用インタビュー（system_prompt_B.md）": Path("prompts/system_prompt_B.md"),
+}
+
+TURN_SCHEMA_PATH = Path("configs/knowledge_llm/knowledge_llm_turn.schema.json")
+KNOWLEDGE_SCHEMA_PATH = Path("configs/knowledge_llm/knowledge_llm_entry.schema.json")
+DEBUG_MODE = os.getenv("DEBUG", "").lower() in ("1", "true", "on")
+FEW_SHOT_TURN = json.dumps(
+    {
+        "control": {"schema_version": "1.0", "mode": "interview"},
+        "state": {"phase": "collect_case", "missing_info": []},
+        "assistant_message": "次の質問をしてください",
+        "knowledge_json": None,
+    },
+    ensure_ascii=False,
+)
+
+
+def load_schema(path: Path) -> Dict[str, Any]:
     try:
-        st.session_state["knowledge_all"] = st.session_state[
-            "knowledge_api"
-        ].get_knowledge_list()
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        st.error(f"スキーマ読み込みに失敗しました: {path.name} / {e}")
+        return {}
+
+
+TURN_SCHEMA = load_schema(TURN_SCHEMA_PATH)
+KNOWLEDGE_SCHEMA = load_schema(KNOWLEDGE_SCHEMA_PATH)
+TURN_VALIDATOR = Draft202012Validator(TURN_SCHEMA) if TURN_SCHEMA else None
+KNOWLEDGE_VALIDATOR = (
+    Draft202012Validator(KNOWLEDGE_SCHEMA) if KNOWLEDGE_SCHEMA else None
+)
+
+
+def append_debug_log(entry: Dict[str, Any]):
+    if not DEBUG_MODE:
+        return
+    st.session_state.setdefault("knowledge_llm_debug_logs", []).append(entry)
+
+
+def init_state():
+    st.session_state.setdefault("knowledge_llm_chat", [])
+    st.session_state.setdefault("knowledge_llm_outputs", [])
+    if "knowledge_api" not in st.session_state:
+        st.session_state["knowledge_api"] = KnowledgeAPI()
+    if "openai_service" not in st.session_state:
+        st.session_state["openai_service"] = AzureOpenAIService()
+
+
+def load_samples() -> List[Dict]:
+    path = Path("docs/review-ui-llm-support/knowledge_samples.json")
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        st.session_state["knowledge_all"] = []
-st.session_state.setdefault("knowledge_llm_selected", [])
-
-st.title("ナレッジ生成/修正（モックUI）")
-st.caption("LLM呼び出しなし。ナレッジ選択/修正タブのみ実装、生成タブは後続。")
-
-tab_select, tab_generate = st.tabs(["ナレッジ選択", "ナレッジ生成（モック）"])
+        return []
 
 
-def _search_text(items, query):
-    q = query.lower()
-    hits = []
-    for k in items:
-        blob = " ".join(
-            str(k.get(f, ""))
-            for f in [
-                "knowledge_title",
-                "target_clause",
-                "review_points",
-                "action_plan",
-                "clause_sample",
-            ]
-        ).lower()
-        if q in blob:
-            hits.append(k)
-    return hits
+def load_prompts() -> Dict[str, str]:
+    prompts = {}
+    for label, path in PROMPT_FILES.items():
+        try:
+            prompts[label] = path.read_text(encoding="utf-8")
+        except Exception:
+            prompts[label] = ""
+    return prompts
 
 
-with tab_select:
-    st.subheader("ナレッジ指定")
-    method = st.radio(
-        "選択方法",
-        [
-            "テキスト検索",
-            "ベクトル検索（モック・フィルタ方式）",
-        ],
-        horizontal=True,
-    )
+def flatten_document_result(doc: Dict[str, Any]) -> str:
+    """document_inputの結果dictをシンプルなテキストに整形"""
+    if not isinstance(doc, dict):
+        return ""
+    parts: List[str] = []
+    if doc.get("title"):
+        parts.append(str(doc["title"]))
+    if doc.get("introduction"):
+        parts.append(str(doc["introduction"]))
+    for clause in doc.get("clauses", []):
+        if isinstance(clause, dict):
+            num = clause.get("clause_number", "")
+            text = clause.get("text", "")
+            if num:
+                parts.append(f"{num}\n{text}")
+            else:
+                parts.append(str(text))
+    if doc.get("signature_section"):
+        parts.append(str(doc["signature_section"]))
+    for att in doc.get("attachments", []):
+        parts.append(str(att))
+    return "\n\n".join(p for p in parts if p)
 
-    knowledge_all = st.session_state["knowledge_all"]
-    selected_ids = set(st.session_state.get("knowledge_llm_selected", []))
-    if method == "テキスト検索":
-        filter_text = st.text_input(
-            "テキストフィルタ（タイトル/対象条項/審査観点/対応策/条項サンプル）",
-            placeholder="キーワードで絞り込み",
-        )
-        filtered = (
-            _search_text(knowledge_all, filter_text) if filter_text else knowledge_all
-        )
-    else:
-        filter_text = st.text_input(
-            "ベクトル検索クエリ（モック・フィルタ方式）",
-            placeholder="類似検索キーワードで候補を絞り込み",
-        )
-        filtered = (
-            _search_text(knowledge_all, filter_text) if filter_text else knowledge_all
-        )
 
-    options = [
-        f"No.{k.get('knowledge_number')} {k.get('knowledge_title','')}"
-        for k in filtered
-    ]
-    picked = st.multiselect(
-        f"ナレッジを選択（{len(filtered)}件中）", options, default=[]
-    )
-    chosen_numbers = {int(lbl.split(" ")[0].replace("No.", "")) for lbl in picked}
-    filtered_ids = {k.get("id") for k in filtered}
-    new_selected = {
-        k.get("id") for k in filtered if k.get("knowledge_number") in chosen_numbers
+def render_text_with_breaks(content: str) -> str:
+    """Markdownで単一改行も反映させるため \\n を明示的に改行に置換"""
+    if not content:
+        return ""
+    return content.replace("\n", "  \n")
+
+
+def extract_texts(files) -> List[str]:
+    texts: List[str] = []
+    for f in files:
+        try:
+            ext = Path(f.name).suffix.lower()
+            if ext == ".pdf":
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+                tmp.write(f.getvalue())
+                tmp.flush()
+                tmp_path = tmp.name
+                tmp.close()
+                try:
+                    doc = extract_text_from_document(tmp_path)
+                    texts.append(flatten_document_result(doc))
+                finally:
+                    try:
+                        Path(tmp_path).unlink(missing_ok=True)
+                    except Exception as cleanup_err:
+                        append_debug_log({"file_cleanup_error": str(cleanup_err)})
+            else:
+                texts.append(f.getvalue().decode("utf-8", errors="ignore"))
+        except Exception as e:
+            err_msg = f"file:{getattr(f,'name','unknown')} error:{e}"
+            append_debug_log({"file_error": err_msg})
+            texts.append(err_msg if DEBUG_MODE else "")
+    return texts
+
+
+def parse_and_validate_turn(raw: str) -> Dict[str, Union[bool, str, List[Dict]]]:
+    """LLM出力(JSON文字列)を turn/knowledge スキーマで検証"""
+    if not raw:
+        return {"ok": False, "error": "empty", "error_type": "empty"}
+    if not TURN_VALIDATOR or not KNOWLEDGE_VALIDATOR:
+        return {"ok": False, "error": "validator_not_ready", "error_type": "config"}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {"ok": False, "error": f"json_parse: {e}", "error_type": "parse"}
+
+    try:
+        TURN_VALIDATOR.validate(parsed)
+    except ValidationError as e:
+        return {
+            "ok": False,
+            "error": f"turn_schema: {list(e.path)} {e.message}",
+            "error_type": "turn_schema",
+        }
+
+    knowledge = parsed.get("knowledge_json")
+    knowledge_list: List[Dict] = []
+    if knowledge is not None:
+        if not isinstance(knowledge, dict):
+            return {
+                "ok": False,
+                "error": "knowledge_json_type",
+                "error_type": "knowledge_schema",
+            }
+        try:
+            KNOWLEDGE_VALIDATOR.validate(knowledge)
+        except ValidationError as e:
+            return {
+                "ok": False,
+                "error": f"knowledge_schema: {list(e.path)} {e.message}",
+                "error_type": "knowledge_schema",
+            }
+        normalized = {k: str(knowledge.get(k, "") or "") for k in FIELDS}
+        knowledge_list.append(normalized)
+
+    return {
+        "ok": True,
+        "assistant_message": str(parsed.get("assistant_message", "") or ""),
+        "knowledge": knowledge_list,
     }
-    # フィルタに出ているものは選択を置き換え、フィルタ外の既存選択は維持
-    selected_ids = (selected_ids - filtered_ids) | new_selected
 
-    st.markdown("---")
-    display_items = [
-        k for k in knowledge_all if str(k.get("id")) in {str(x) for x in selected_ids}
-    ]
-    st.write(f"選択済み: {len(display_items)} 件")
-    for idx, k in enumerate(display_items):
-        kn_id = k.get("id", f"tmp-{idx}")
-        label = f"No.{k.get('knowledge_number')} {k.get('knowledge_title','')}"
-        with st.expander(label, expanded=False):
-            st.markdown(f"**対象条項**: {k.get('target_clause','')}")
-            st.markdown(f"**審査観点**: {k.get('review_points','')}")
-            st.markdown(f"**対応策**: {k.get('action_plan','')}")
-            st.markdown(f"**条項サンプル**: {k.get('clause_sample','')}")
-    st.session_state["knowledge_llm_selected"] = list(selected_ids)
 
-with tab_generate:
-    # サイドバー: 選択済みナレッジと生成結果
-    selected_items = [
-        k
-        for k in st.session_state["knowledge_all"]
-        if k.get("id") in st.session_state.get("knowledge_llm_selected", [])
-    ]
-    selected_export = [
-        {
-            "contract_type": k.get("contract_type"),
-            "target_clause": k.get("target_clause"),
-            "knowledge_title": k.get("knowledge_title"),
-            "review_points": k.get("review_points"),
-            "action_plan": k.get("action_plan"),
-            "clause_sample": k.get("clause_sample"),
-        }
-        for k in selected_items
-    ]
-    sidebar = st.sidebar
-    sidebar.subheader("選択済みナレッジ")
-    for idx, k in enumerate(selected_export):
-        label = f"選択ナレッジ {idx+1}: {k.get('knowledge_title','')}"
-        with sidebar.expander(label, expanded=False):
-            st.markdown(f"**契約種別**: {k.get('contract_type','')}")
-            st.markdown(f"**対象条項**: {k.get('target_clause','')}")
-            st.markdown(f"**審査観点**: {k.get('review_points','')}")
-            st.markdown(f"**対応策**: {k.get('action_plan','')}")
-            st.markdown(f"**条項サンプル**: {k.get('clause_sample','')}")
-
-    sidebar.markdown("---")
-    sidebar.subheader("ナレッジ生成結果（モック）")
-    last_user_msg = next(
-        (
-            m
-            for m in reversed(st.session_state.get("knowledge_chat", []))
-            if m["role"] == "user"
-        ),
-        None,
+def build_repair_instruction(raw_output: str, error: str, error_type: str) -> str:
+    return "\n".join(
+        [
+            "以下は直前の出力JSONです。",
+            "",
+            "---",
+            raw_output,
+            "---",
+            "",
+            f"バリデーションエラー種別: {error_type}",
+            f"詳細: {error}",
+            "",
+            "同じ意味を維持しつつ、指定スキーマに完全準拠する単一のJSONオブジェクトのみを返してください。",
+            "フィールドは control/state/assistant_message/knowledge_json の4つのみを使用してください。",
+        ]
     )
-    if sidebar.button("ナレッジ再生成（モック）"):
-        user_hint = last_user_msg["content"] if last_user_msg else ""
-        file_texts = last_user_msg.get("file_texts", []) if last_user_msg else []
-        merged_files = "\n".join(t[:200] for t in file_texts if t)
-        merged_clause = (merged_files + "\n" + user_hint).strip()
-        draft = {
-            "knowledge_title": (
-                (
-                    last_user_msg.get("file_names", [None])[0]
-                    or "ドラフトタイトル（モック）"
-                )
-                if last_user_msg
-                else "ドラフトタイトル（モック）"
-            ),
-            "target_clause": merged_clause,
-            "review_points": "- チャット指示と添付に基づき審査観点を整理（モック）",
-            "action_plan": "- 修正方針を踏まえて条文案を更新（モック）",
-            "clause_sample": merged_clause or "修正文案をここに追記（モック）",
-            "contract_type": (
-                selected_export[0].get("contract_type") if selected_export else "汎用"
-            ),
+
+
+def call_llm(
+    user_text: str,
+    file_texts: List[str],
+    system_prompt: str,
+    history: Optional[List[Dict[str, Any]]] = None,
+    max_retries: int = 2,
+) -> Dict[str, Optional[List[Dict]]]:
+    content_blocks = []
+    if user_text:
+        content_blocks.append(f"ユーザー指示:\n{user_text}")
+    if file_texts:
+        merged = "\n\n".join(file_texts)
+        content_blocks.append(f"添付テキスト:\n{merged}")
+    payload = "\n\n".join(content_blocks)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "assistant", "content": FEW_SHOT_TURN},
+    ]
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant"):
+                messages.append({"role": role, "content": str(content)})
+    messages.append({"role": "user", "content": payload})
+    response_format = None
+    if TURN_SCHEMA:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "ContractReviewKnowledgeTurn",
+                "schema": TURN_SCHEMA,
+            },
         }
-        if user_hint:
-            draft["review_points"] += f"\n- 指示: {user_hint[:200]}"
-        if selected_export:
-            draft["action_plan"] += "\n- 既存ナレッジとの差分を確認"
-        sidebar.json(draft)
+    debug_entry: Dict[str, Any] = {
+        "payload_without_system": payload,
+        "file_processed": bool(file_texts),
+        "file_texts": file_texts if DEBUG_MODE else None,
+        "retries": 0,
+        "history_count": len(history) if history else 0,
+    }
+    try:
+        raw = st.session_state["openai_service"].get_openai_response_gpt51_chat(
+            messages, format=response_format
+        )
+        validated = parse_and_validate_turn(raw)
+        debug_entry.update(
+            {
+                "raw": raw,
+                "validation": validated,
+            }
+        )
+        retries = 0
+        while not validated.get("ok") and retries < max_retries:
+            retries += 1
+            debug_entry["retries"] = retries
+            repair_msg = build_repair_instruction(
+                raw_output=raw,
+                error=str(validated.get("error", "")),
+                error_type=str(validated.get("error_type", "unknown")),
+            )
+            repair_messages = [
+                *messages,
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": repair_msg},
+            ]
+            raw = st.session_state["openai_service"].get_openai_response_gpt51_chat(
+                repair_messages, format=response_format
+            )
+            validated = parse_and_validate_turn(raw)
+            debug_entry.setdefault("retry_results", []).append(
+                {"raw": raw, "validation": validated}
+            )
 
-    # メイン: チャット欄
-    st.subheader("チャット（修正方針入力）")
-    st.caption("st.chat_inputでテキスト/添付を送信（LLMモック）")
+        if not validated.get("ok"):
+            append_debug_log(debug_entry)
+            return {
+                "ok": False,
+                "raw": raw,
+                "parsed": None,
+                "error": validated.get("error"),
+            }
+        append_debug_log(debug_entry)
+        return {
+            "ok": True,
+            "raw": raw,
+            "parsed": validated.get("knowledge"),
+            "assistant_message": validated.get("assistant_message", ""),
+        }
+    except Exception as e:
+        st.error("LLM呼び出しに失敗しました。環境変数とモデル設定を確認してください。")
+        return {"ok": False, "raw": "", "parsed": None}
 
-    st.session_state.setdefault("knowledge_chat", [])
 
-    for msg in st.session_state["knowledge_chat"]:
+def render_generated():
+    outputs: List[Dict] = st.session_state.get("knowledge_llm_outputs", [])
+    st.subheader("生成結果")
+    if not outputs:
+        st.info("まだ生成結果がありません。指示とファイルを送信してください。")
+        return
+
+    for idx, item in enumerate(outputs):
+        title = item.get("knowledge_title") or f"生成ナレッジ {idx+1}"
+        with st.expander(f"{idx+1}. {title}", expanded=False):
+            st.markdown(f"- 契約種別: {item.get('contract_type', '')}")
+            st.markdown(f"- 対象条項: {item.get('target_clause', '')}")
+            st.markdown(f"- 審査観点:\n{item.get('review_points', '')}")
+            st.markdown(f"- 対応策:\n{item.get('action_plan', '')}")
+            st.markdown(f"- 条項サンプル:\n{item.get('clause_sample', '')}")
+
+    json_str = json.dumps(outputs, ensure_ascii=False, indent=2)
+    st.download_button(
+        "JSONダウンロード",
+        json_str,
+        file_name="knowledge_generated.json",
+        mime="application/json",
+    )
+
+
+def render_sidebar(samples: List[Dict]):
+    st.sidebar.subheader("既存ナレッジ例")
+    for idx, s in enumerate(samples[:5]):
+        with st.sidebar.expander(
+            f"サンプル {idx+1}: {s.get('knowledge_title','')}", expanded=False
+        ):
+            st.markdown(f"- 契約種別: {s.get('contract_type','')}")
+            st.markdown(f"- 対象条項: {s.get('target_clause','')}")
+            st.markdown(f"- 審査観点:\n{s.get('review_points','')}")
+            st.markdown(f"- 対応策:\n{s.get('action_plan','')}")
+    st.sidebar.markdown("---")
+    st.sidebar.caption("出力JSONは機能2/3のスキーマを前提に整形済み。")
+
+
+def main():
+    init_state()
+    samples = load_samples()
+    prompts = load_prompts()
+    st.sidebar.subheader("システムプロンプト")
+    prompt_choice = st.sidebar.selectbox(
+        "プロンプト選択",
+        options=list(prompts.keys()),
+        index=0 if prompts else None,
+        help="A: 深掘り重視 / B: 汎用インタビュー",
+    )
+    if prompt_choice and prompts.get(prompt_choice):
+        with st.sidebar.expander("プロンプト内容", expanded=False):
+            st.markdown(f"{prompts[prompt_choice]}")
+    system_prompt = prompts.get(prompt_choice, "")
+
+    if DEBUG_MODE:
+        with st.sidebar.expander("デバッグログ (セッション内)", expanded=False):
+            logs = st.session_state.get("knowledge_llm_debug_logs", [])
+            if not logs:
+                st.caption("ログなし")
+            else:
+                for i, log in enumerate(logs):
+                    st.markdown(f"- リクエスト {i+1}: retries={log.get('retries',0)}")
+                if st.checkbox("ログ詳細を表示", value=False):
+                    st.json(logs)
+
+    outputs: List[Dict] = st.session_state.get("knowledge_llm_outputs", [])
+    if outputs:
+        json_str = json.dumps(outputs, ensure_ascii=False, indent=2)
+        st.sidebar.download_button(
+            "生成ナレッジJSONをダウンロード",
+            json_str,
+            file_name="knowledge_generated.json",
+            mime="application/json",
+        )
+    st.title("ナレッジ創出（LLM）")
+    st.caption(
+        "チャットで指示とファイルを送信し、CosmosDBスキーマのナレッジJSONを生成。"
+    )
+
+    for msg in st.session_state.get("knowledge_llm_chat", []):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            st.markdown(render_text_with_breaks(msg.get("content", "")))
             if msg.get("file_names"):
                 st.caption(f"添付: {', '.join(msg['file_names'])}")
 
     submission = st.chat_input(
-        "修正方針や追加入力を送信（添付可）",
+        "指示や要件を入力し、必要ならファイルを添付",
         accept_file=True,
         file_type=["txt", "md", "pdf", "docx"],
     )
@@ -194,24 +408,46 @@ with tab_generate:
             user_text = getattr(submission, "text", "") or ""
             files = getattr(submission, "files", []) or []
         file_names = [f.name for f in files]
-        file_texts = []
-        for f in files:
-            try:
-                file_texts.append(f.getvalue().decode("utf-8", errors="ignore"))
-            except Exception:
-                file_texts.append("")
-        st.session_state["knowledge_chat"].append(
-            {
-                "role": "user",
-                "content": user_text or "",
-                "file_names": file_names,
-                "file_texts": file_texts,
-            }
-        )
-        st.session_state["knowledge_chat"].append(
-            {
-                "role": "assistant",
-                "content": "LLMモック: 指示を受領しました。サイドバーで再生成してください。",
-            }
-        )
+        file_texts = extract_texts(files)
+        user_entry = {"role": "user", "content": user_text, "file_names": file_names}
+        st.session_state["knowledge_llm_chat"].append(user_entry)
+        # 即時表示してからLLM処理開始
+        with st.chat_message("user"):
+            st.markdown(render_text_with_breaks(user_text))
+            if file_names:
+                st.caption(f"添付: {', '.join(file_names)}")
+        with st.spinner("ナレッジを生成中..."):
+            history = st.session_state.get("knowledge_llm_chat", [])[:-1]
+            result = call_llm(
+                user_text,
+                file_texts,
+                system_prompt=system_prompt,
+                history=history,
+            )
+        raw_text = result.get("raw", "")
+        if result.get("ok"):
+            st.session_state["knowledge_llm_outputs"] = result.get("parsed") or []
+            assistant_msg = result.get("assistant_message") or "JSONを生成しました。"
+            st.session_state["knowledge_llm_chat"].append(
+                {
+                    "role": "assistant",
+                    "content": assistant_msg,
+                }
+            )
+        else:
+            st.session_state["knowledge_llm_outputs"] = []
+            fallback = (
+                raw_text
+                or "JSONスキーマを満たす出力が得られませんでした。プロンプト/入力を確認してください。"
+            )
+            st.session_state["knowledge_llm_chat"].append(
+                {
+                    "role": "assistant",
+                    "content": f"{fallback}\n\n検証エラー: {result.get('error','')}",
+                }
+            )
         st.rerun()
+
+
+if __name__ == "__main__":
+    main()

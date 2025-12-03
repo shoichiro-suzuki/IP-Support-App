@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KnowledgeLLMTurn",
+  "type": "object",
+  "required": [
+    "control",
+    "state",
+    "assistant_message",
+    "knowledge_json"
+  ],
+  "properties": {
+    "control": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "mode"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "interview",
+            "clarify",
+            "finalize"
+          ],
+          "description": "対話の意図を表すモード"
+        }
+      },
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "phase",
+        "missing_info"
+      ],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "collect_case",
+            "organize_risks",
+            "draft_knowledge",
+            "review_knowledge"
+          ],
+          "description": "現在の対話フェーズ"
+        },
+        "missing_info": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "追加で聞き出すべき情報を短い日本語で列挙"
+        }
+      },
+      "additionalProperties": false
+    },
+    "assistant_message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ユーザーに表示する日本語メッセージ"
+    },
+    "knowledge_json": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "ナレッジ創出チャットのドラフト/確定版。構造は別スキーマで定義。"
+    }
+  },
+  "additionalProperties": false
+}

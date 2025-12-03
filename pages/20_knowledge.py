@@ -1,13 +1,32 @@
 # 先頭の import 群はあなたのままでOK
+import json
+import math
+from pathlib import Path
+from typing import Any, Dict, List
+
 import streamlit as st
 from api.knowledge_api import KnowledgeAPI
 from collections import deque
-import math
+from jsonschema import Draft202012Validator, ValidationError
 from services.admin_auth import check_admin_auth, show_admin_sidebar
 
 st.set_page_config(layout="wide")
 
 PAGE_SIZE_DEFAULT = 5  # 1ページの件数
+ENTRY_SCHEMA_PATH = Path("configs/knowledge_llm/knowledge_llm_entry.schema.json")
+ENTRY_SCHEMA: Dict[str, Any] = {}
+ENTRY_VALIDATOR: Draft202012Validator | None = None
+
+
+def load_schema():
+    global ENTRY_SCHEMA, ENTRY_VALIDATOR
+    try:
+        ENTRY_SCHEMA = json.loads(ENTRY_SCHEMA_PATH.read_text(encoding="utf-8"))
+        ENTRY_VALIDATOR = Draft202012Validator(ENTRY_SCHEMA)
+    except Exception as e:
+        st.error(f"スキーマ読み込みに失敗しました: {e}")
+        ENTRY_SCHEMA = {}
+        ENTRY_VALIDATOR = None
 
 
 def apply_filters(all_items, ctype: str, q: str):
@@ -33,6 +52,38 @@ def apply_filters(all_items, ctype: str, q: str):
         return q in blob
 
     return [k for k in all_items if hit(k)]
+
+
+def validate_upload(text: str) -> Dict[str, Any]:
+    """knowledge_llm_entry スキーマで検証"""
+    if not text:
+        return {"ok": False, "error": "empty"}
+    if not ENTRY_VALIDATOR:
+        return {"ok": False, "error": "validator_not_ready"}
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as e:
+        return {"ok": False, "error": f"json_parse: {e}"}
+
+    items: List[Dict] = []
+    if isinstance(parsed, dict):
+        items = [parsed]
+    elif isinstance(parsed, list):
+        if not all(isinstance(x, dict) for x in parsed):
+            return {"ok": False, "error": "invalid_item_type"}
+        items = parsed
+    else:
+        return {"ok": False, "error": "invalid_root"}
+
+    normalized: List[Dict] = []
+    try:
+        for item in items:
+            ENTRY_VALIDATOR.validate(item)
+            normalized.append({k: str(item.get(k, "") or "") for k in ENTRY_SCHEMA.get("required", [])})
+    except ValidationError as e:
+        return {"ok": False, "error": f"schema: {list(e.path)} {e.message}"}
+
+    return {"ok": True, "items": normalized}
 
 
 def paginate(items, page: int, page_size: int):
@@ -80,6 +131,7 @@ def show_delete_dialog():
 
 
 def main():
+    load_schema()
     show_admin_sidebar()
     st.title("ナレッジ管理")
     if "knowledge_api" not in st.session_state:
@@ -131,9 +183,54 @@ def main():
             st.session_state["page_size"],
         )
         st.session_state["page"] = page
+        is_admin = check_admin_auth()
+
+        with st.expander("JSONアップロード（knowledge_llm_entryスキーマ検証）", expanded=False):
+            uploaded = st.file_uploader(
+                "22ページで生成した knowledge_generated.json をアップロード",
+                type=["json"],
+                accept_multiple_files=False,
+                disabled=not is_admin,
+                key="knowledge_upload",
+            )
+            if not is_admin:
+                st.info("管理者のみアップロード可能です。")
+            if uploaded is not None:
+                token = f"{uploaded.name}:{uploaded.size}"
+                last_token = st.session_state.get("knowledge_last_upload_token")
+                if last_token == token:
+                    st.info("同じファイルは登録済みです。ファイルを入れ替えてください。")
+                else:
+                    content = uploaded.getvalue().decode("utf-8", errors="ignore")
+                    validated = validate_upload(content)
+                    if validated.get("ok"):
+                        try:
+                            base_number = api.get_max_knowledge_number()
+                            saved_count = 0
+                            for idx, item in enumerate(validated.get("items", [])):
+                                data = dict(item)
+                                data["knowledge_number"] = base_number + idx + 1
+                                data.setdefault("record_status", "latest")
+                                data.setdefault("approval_status", "draft")
+                                api.save_knowledge(data)
+                                saved_count += 1
+                            st.session_state["knowledge_last_upload_token"] = token
+                            st.success(f"JSONから {saved_count} 件を登録しました。")
+                            st.session_state["knowledge_all"] = api.get_knowledge_list()
+                            st.session_state["knowledge_filtered"] = apply_filters(
+                                st.session_state["knowledge_all"],
+                                st.session_state.get("contract_filter", "すべて"),
+                                st.session_state.get("q", ""),
+                            )
+                            if st.session_state["knowledge_all"]:
+                                st.session_state["selected"] = st.session_state["knowledge_all"][0]
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"登録に失敗しました: {e}")
+                    else:
+                        st.error(f"JSON検証エラー: {validated.get('error')}")
 
         # ---- 新規追加 ----
-        is_admin = check_admin_auth()
         if st.button("新規追加", use_container_width=True, disabled=not is_admin):
             st.session_state["knowledge_page_status"] = "new"
             try:

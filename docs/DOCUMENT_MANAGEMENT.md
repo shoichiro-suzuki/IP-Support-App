@@ -21,10 +21,13 @@
 | 画面・UI (Home.py, pages/) | 画面仕様メモ | 画面遷移/I-O/入力制約 |
 | サービスロジック (services/, api/) | ユースケース/フロー | 入出力・例外・依存関係 |
 | 外部連携 (azure_/...) | 接続設定・認証情報 | エンドポイント・必要ENV |
-| データ/ナレッジ (knowledge_all.py, match_cl_and_kn.json) | データモデル/更新手順 | バージョン・生成条件 |
+| データ/ナレッジ (CosmosDB: knowledge_entry, docs/review-ui-llm-support/knowledge_samples.json) | データモデル/更新手順 | バージョン・生成条件・スクリプト手順 |
 | 環境/運用 | セットアップ・運用手順 | 手順更新・トラブルシュート |
 
 ※該当メモが無い場合は docs/ 以下に新規作成。
+
+- LLM出力ガードレール用スキーマ: `configs/knowledge_llm/knowledge_llm_turn.schema.json`（応答固定: control/state/assistant_message/knowledge_json）。コード生成AIはバリデーション実装時に必ず参照。
+- ナレッジ本体スキーマ: `configs/knowledge_llm/knowledge_llm_entry.schema.json`（CosmosDB準拠の knowledge_json）。UI/アップロード/バリデーション時に参照。
 
 ## 品質基準
 - 正確性: コード/設定値と一致
@@ -41,9 +44,12 @@
 ├── services/           # ビジネスロジック
 ├── api/                # API関連
 ├── azure_/             # Azure OpenAI/Cosmos/Document Intelligence
-├── knowledge_all.py    # ナレッジ定義
-├── match_cl_and_kn.json
-├── docs/               # ドキュメント
+├── pages/              # Streamlit画面
+├── scripts/            # メンテ/データ操作（例: export_knowledge_samples.py）
+├── docs/               # ドキュメント・ナレッジサンプル
+├── tests/              # テスト
+├── configs/knowledge_llm/ # LLM出力/ナレッジ検証用スキーマ
+├── prompts/            # LLMシステムプロンプト（knowledge_llm等）
 ├── requirements.txt
 ├── AGENTS.md
 └── プロンプト説明.md
