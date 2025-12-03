@@ -112,10 +112,9 @@ class AzureOpenAIService:
         answer = response.choices[0].message.content
         return answer
 
-    def get_openai_response_gpt51_chat(self, messages):
+    def get_openai_response_gpt51_chat(self, messages, format=None):
         response = self.client.chat.completions.create(
-            model="gpt-5.1-chat",
-            messages=messages,
+            model="gpt-5.1-chat", messages=messages, response_format=format
         )
         answer = response.choices[0].message.content
         return answer

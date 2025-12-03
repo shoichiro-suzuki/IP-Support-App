@@ -26,6 +26,9 @@
 
 ※該当メモが無い場合は docs/ 以下に新規作成。
 
+- LLM出力ガードレール用スキーマ: `configs/knowledge_llm/knowledge_llm_turn.schema.json`（応答固定: control/state/assistant_message/knowledge_json）。コード生成AIはバリデーション実装時に必ず参照。
+- ナレッジ本体スキーマ: `configs/knowledge_llm/knowledge_llm_entry.schema.json`（CosmosDB準拠の knowledge_json）。UI/アップロード/バリデーション時に参照。
+
 ## 品質基準
 - 正確性: コード/設定値と一致
 - 最新性: 変更直後に反映し日付やバージョンを残す
@@ -45,6 +48,8 @@
 ├── scripts/            # メンテ/データ操作（例: export_knowledge_samples.py）
 ├── docs/               # ドキュメント・ナレッジサンプル
 ├── tests/              # テスト
+├── configs/knowledge_llm/ # LLM出力/ナレッジ検証用スキーマ
+├── prompts/            # LLMシステムプロンプト（knowledge_llm等）
 ├── requirements.txt
 ├── AGENTS.md
 └── プロンプト説明.md

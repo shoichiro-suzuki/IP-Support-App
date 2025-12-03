@@ -19,7 +19,7 @@
     - 更新するときは `pages\22_knowledge_llm.py` でインポートする機能を追加してJSONファイルをアップロードする：機能３
     - `knowledge_title`, `target_clause`, `review_points`, `action_plan`, `clause_sample`, `contract_type`
 
-### 機能３：新ナレッジをJSONから追加
-- JSONファイルをアップロード
-- `id`, `knowledge_number` を自動付与
-- ベクトルフィールドを追加してDB追加
+### 機能３：新ナレッジをJSONから追加（pages/20_knowledge.py）
+- 22ページで生成・ダウンロードした JSON をアップロード（`configs/knowledge_llm/knowledge_llm_entry.schema.json` で検証）
+- `knowledge_number` を採番、`id`/タイムスタンプは API 側で付与
+- ベクトル付与は既存ロジックに依存（必要ならサービス側で拡張）
