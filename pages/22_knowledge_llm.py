@@ -28,7 +28,16 @@ PROMPT_FILES = {
 
 TURN_SCHEMA_PATH = Path("configs/knowledge_llm/knowledge_llm_turn.schema.json")
 KNOWLEDGE_SCHEMA_PATH = Path("configs/knowledge_llm/knowledge_llm_entry.schema.json")
-DEBUG_MODE = os.getenv("DEBUG", "").lower() in ("True", "true")
+DEBUG_MODE = os.getenv("DEBUG", "").lower() in ("1", "true", "on")
+FEW_SHOT_TURN = json.dumps(
+    {
+        "control": {"schema_version": "1.0", "mode": "interview"},
+        "state": {"phase": "collect_case", "missing_info": []},
+        "assistant_message": "次の質問をしてください",
+        "knowledge_json": None,
+    },
+    ensure_ascii=False,
+)
 
 
 def load_schema(path: Path) -> Dict[str, Any]:
@@ -207,7 +216,11 @@ def build_repair_instruction(raw_output: str, error: str, error_type: str) -> st
 
 
 def call_llm(
-    user_text: str, file_texts: List[str], system_prompt: str, max_retries: int = 1
+    user_text: str,
+    file_texts: List[str],
+    system_prompt: str,
+    history: Optional[List[Dict[str, Any]]] = None,
+    max_retries: int = 2,
 ) -> Dict[str, Optional[List[Dict]]]:
     content_blocks = []
     if user_text:
@@ -218,8 +231,15 @@ def call_llm(
     payload = "\n\n".join(content_blocks)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": payload},
+        {"role": "assistant", "content": FEW_SHOT_TURN},
     ]
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant"):
+                messages.append({"role": role, "content": str(content)})
+    messages.append({"role": "user", "content": payload})
     response_format = None
     if TURN_SCHEMA:
         response_format = {
@@ -234,6 +254,7 @@ def call_llm(
         "file_processed": bool(file_texts),
         "file_texts": file_texts if DEBUG_MODE else None,
         "retries": 0,
+        "history_count": len(history) if history else 0,
     }
     try:
         raw = st.session_state["openai_service"].get_openai_response_gpt51_chat(
@@ -396,7 +417,13 @@ def main():
             if file_names:
                 st.caption(f"添付: {', '.join(file_names)}")
         with st.spinner("ナレッジを生成中..."):
-            result = call_llm(user_text, file_texts, system_prompt=system_prompt)
+            history = st.session_state.get("knowledge_llm_chat", [])[:-1]
+            result = call_llm(
+                user_text,
+                file_texts,
+                system_prompt=system_prompt,
+                history=history,
+            )
         raw_text = result.get("raw", "")
         if result.get("ok"):
             st.session_state["knowledge_llm_outputs"] = result.get("parsed") or []

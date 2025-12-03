@@ -191,37 +191,44 @@ def main():
                 type=["json"],
                 accept_multiple_files=False,
                 disabled=not is_admin,
+                key="knowledge_upload",
             )
             if not is_admin:
                 st.info("管理者のみアップロード可能です。")
             if uploaded is not None:
-                content = uploaded.getvalue().decode("utf-8", errors="ignore")
-                validated = validate_upload(content)
-                if validated.get("ok"):
-                    try:
-                        base_number = api.get_max_knowledge_number()
-                        saved_count = 0
-                        for idx, item in enumerate(validated.get("items", [])):
-                            data = dict(item)
-                            data["knowledge_number"] = base_number + idx + 1
-                            data.setdefault("record_status", "latest")
-                            data.setdefault("approval_status", "draft")
-                            api.save_knowledge(data)
-                            saved_count += 1
-                        st.success(f"JSONから {saved_count} 件を登録しました。")
-                        st.session_state["knowledge_all"] = api.get_knowledge_list()
-                        st.session_state["knowledge_filtered"] = apply_filters(
-                            st.session_state["knowledge_all"],
-                            st.session_state.get("contract_filter", "すべて"),
-                            st.session_state.get("q", ""),
-                        )
-                        if st.session_state["knowledge_all"]:
-                            st.session_state["selected"] = st.session_state["knowledge_all"][0]
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"登録に失敗しました: {e}")
+                token = f"{uploaded.name}:{uploaded.size}"
+                last_token = st.session_state.get("knowledge_last_upload_token")
+                if last_token == token:
+                    st.info("同じファイルは登録済みです。ファイルを入れ替えてください。")
                 else:
-                    st.error(f"JSON検証エラー: {validated.get('error')}")
+                    content = uploaded.getvalue().decode("utf-8", errors="ignore")
+                    validated = validate_upload(content)
+                    if validated.get("ok"):
+                        try:
+                            base_number = api.get_max_knowledge_number()
+                            saved_count = 0
+                            for idx, item in enumerate(validated.get("items", [])):
+                                data = dict(item)
+                                data["knowledge_number"] = base_number + idx + 1
+                                data.setdefault("record_status", "latest")
+                                data.setdefault("approval_status", "draft")
+                                api.save_knowledge(data)
+                                saved_count += 1
+                            st.session_state["knowledge_last_upload_token"] = token
+                            st.success(f"JSONから {saved_count} 件を登録しました。")
+                            st.session_state["knowledge_all"] = api.get_knowledge_list()
+                            st.session_state["knowledge_filtered"] = apply_filters(
+                                st.session_state["knowledge_all"],
+                                st.session_state.get("contract_filter", "すべて"),
+                                st.session_state.get("q", ""),
+                            )
+                            if st.session_state["knowledge_all"]:
+                                st.session_state["selected"] = st.session_state["knowledge_all"][0]
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"登録に失敗しました: {e}")
+                    else:
+                        st.error(f"JSON検証エラー: {validated.get('error')}")
 
         # ---- 新規追加 ----
         if st.button("新規追加", use_container_width=True, disabled=not is_admin):
