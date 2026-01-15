@@ -21,5 +21,6 @@
 - `search_similar_clauses(...)`: `ContractAPI.search_similar_clauses` を呼び、条項番号ごとに類似条項をまとめる。
 
 ## services
-- `document_input.extract_text_from_document(path)`: `.docx` はSDT含むテキスト抽出、`.pdf` は Document Intelligence OCR。LLMで条文の結合指示を取得し、署名セクション/別紙を切り出した結果を返す。
+- `document_input.extract_text_from_document(path)`: `.docx` はSDT含むテキスト抽出（`lxml.etree` 使用）、`.pdf` は Document Intelligence OCR。LLM結果が文字列以外なら失敗扱い。条文の結合指示を取得し、署名セクション/別紙を切り出した結果を返す。
+- 詳細: `docs/document_input.md`
 - `admin_auth`: `KNOWLEDGE_ADMIN_PASSWORD` で管理者判定。StreamlitサイドバーのログインUIを提供。

@@ -19,7 +19,7 @@ def extract_text_from_document(file_path: str) -> dict:
         - 変更履歴の削除(w:del)配下の文字は除外
         """
         import zipfile
-        from lxml import etree
+        import lxml.etree as etree
 
         ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
@@ -237,14 +237,15 @@ def extract_text_from_document(file_path: str) -> dict:
     except Exception:
         result = ""
 
-    def is_json(s):
+    def is_json(s: str) -> bool:
         try:
             json.loads(s)
             return True
         except Exception:
             return False
 
-    if not is_json(result):
+    result_text = result if isinstance(result, str) else ""
+    if not is_json(result_text):
         return {
             "error": "LLM補正に失敗しました。手動修正してください。",
             "raw_text": text,
@@ -254,7 +255,7 @@ def extract_text_from_document(file_path: str) -> dict:
     import copy
 
     clauses = copy.deepcopy(chunked["clauses"])
-    merge_groups = json.loads(result)
+    merge_groups = json.loads(result_text)
     merged = []
     used_ids = set()
     for group in merge_groups:
