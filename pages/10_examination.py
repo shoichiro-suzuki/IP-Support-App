@@ -180,6 +180,32 @@ def build_chat_context():
     }
 
 
+def build_mapping_debug_info(knowledge_all, clauses, mapping_response, trace):
+    clause_numbers = [str(c.get("clause_number", "")) for c in clauses]
+    missing_target_clause_ids = [
+        k.get("id")
+        for k in knowledge_all
+        if not str(k.get("target_clause", "")).strip()
+    ]
+    knowledge_target_samples = [
+        {
+            "id": k.get("id"),
+            "target_clause": k.get("target_clause", ""),
+        }
+        for k in knowledge_all[:5]
+    ]
+    return {
+        "knowledge_count": len(knowledge_all),
+        "clause_count": len(clauses),
+        "clause_numbers": clause_numbers,
+        "missing_target_clause_count": len(missing_target_clause_ids),
+        "missing_target_clause_ids": missing_target_clause_ids,
+        "knowledge_target_samples": knowledge_target_samples,
+        "mapping_response": mapping_response,
+        "trace": trace,
+    }
+
+
 async def run_examination_chat(prompt: str, llm_model: str) -> str:
     """サイドバーでの審査チャット呼び出し"""
     context = build_chat_context()
@@ -272,6 +298,8 @@ def main():
         st.session_state["clause_review_status"] = {}
     if "last_uploaded_file" not in st.session_state:
         st.session_state["last_uploaded_file"] = None
+    if "exam_mapping_debug_info" not in st.session_state:
+        st.session_state["exam_mapping_debug_info"] = None
 
     # サイドバーコントロールの表示
     # sidebar_start_review, llm_model = render_sidebar_controls()
@@ -505,6 +533,7 @@ def main():
                 ],
                 key="sidebar_llm_model",
             )
+            debug_mode = st.checkbox("デバッグ表示", key="exam_debug")
 
             # 審査開始ボタン（条件付き表示）
             if st.button("審査開始", type="primary"):
@@ -520,7 +549,11 @@ def main():
                     clauses = collect_exam_clauses()
                     # knowledgeとclauseのマッピング結果を取得
                     try:
-                        mapping_response, clauses_augmented, _ = asyncio.run(
+                        (
+                            mapping_response,
+                            clauses_augmented,
+                            mapping_trace,
+                        ) = asyncio.run(
                             async_llm_service.amatching_clause_and_knowledge(
                                 st.session_state["knowledge_all"], clauses
                             )
@@ -533,8 +566,23 @@ def main():
                     mapped_total = sum(
                         len(m.get("clause_number", [])) for m in mapping_response or []
                     )
+                    st.session_state["exam_mapping_debug_info"] = (
+                        build_mapping_debug_info(
+                            st.session_state["knowledge_all"],
+                            clauses,
+                            mapping_response,
+                            mapping_trace,
+                        )
+                    )
                     if mapped_total == 0:
-                        st.warning("ナレッジと条項の対応付けができませんでした。対象条項条件や入力条文を確認してください。")
+                        st.warning(
+                            "ナレッジと条項の対応付けができませんでした。対象条項条件や入力条文を確認してください。"
+                        )
+                        if debug_mode:
+                            debug_info = st.session_state["exam_mapping_debug_info"]
+                            if debug_info:
+                                with st.expander("デバッグ情報", expanded=True):
+                                    st.json(debug_info)
                         return
 
                     # 関連条項が無いナレッジを抽出
