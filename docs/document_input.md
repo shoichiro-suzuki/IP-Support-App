@@ -1,6 +1,7 @@
 # document_input 改造計画
 - 対象: `services/document_input.py`
 - 目的: 契約書テキストを条文ごとに分割し、末尾（署名欄/別紙）を高精度に切り出す
+- 実装: `services/boundary_audit.py` / `prompts/document_input_boundary_audit.md` / `configs/document_input/boundary_audit.schema.json`
 
 ## 課題
 - 「第X条に基づき」等の引用で誤分割が頻発
@@ -8,10 +9,9 @@
 
 ## 改造方針
 ### テキスト抽出
-- Word: 変更なし
+- Word: 現行のテキスト抽出方法から変更なし
 - PDF:
-  - 現状: `result.content`
-  - 変更: `result.paragraphs.content` を1行単位で連結
+  - 変更: `result.paragraphs.content` を1行単位で連結（無い場合は中断して通知）
   - 参考: `tests/ocr_result_test_加工済.json`
 
 ### 条文分割
@@ -25,6 +25,7 @@
 - LLMは境界の妥当性を判断し、修正後の行番号境界をJSONで返却
 - 末尾塊に限らず、条文境界全体/一部にも適用可能
 - 仕様は「末条文末尾ルール分割 & LLM監査 仕様書」を適用
+- 全条文境界のLLM監査は既定で有効
 
 ### 境界監査クラス（共通化）
 - 目的: 境界候補挿入＋段落番号付与＋LLM監査を共通処理として切り出す
@@ -40,13 +41,12 @@
 - 入力:
   - `paragraphs: list[str]`（段落配列）
   - `boundary_rules: list[BoundaryRule]`
-  - `max_candidates: dict`
   - `preprocess: BoundaryPreprocessOptions`
     - `preserve_empty_lines: bool`
     - `line_number_width: int`
   - `llm_config: LlmAuditConfig`
 - 出力:
-  - `sections: list[AuditedSection]`（`name/start_line/end_line/text`）
+  - `final_sections: list[AuditedSection]`（`name/start_line/end_line`）
   - `boundaries: list[BoundaryDecision]`（`id/status/move_to_line/confidence/rationale`）
   - `warnings: list[AuditWarning]`
 
@@ -125,16 +125,16 @@
     {
       "id": "SIG_CAND_1",
       "status": "accept" | "move" | "remove",
-      "move_to_line": 0,
+      "move_to_line": 1,
       "section_after_boundary": "signature" | "attachments" | "unknown",
       "confidence": 0.0,
       "rationale": "string (<= 25 words)"
     }
   ],
   "final_sections": [
-    { "name": "clause_last", "start_line": 1, "end_line": 0 },
-    { "name": "signature", "start_line": 0, "end_line": 0 },
-    { "name": "attachments", "start_line": 0, "end_line": 0 }
+    { "name": "clause_last", "start_line": 1, "end_line": 10 },
+    { "name": "signature", "start_line": 11, "end_line": 20 },
+    { "name": "attachments", "start_line": 21, "end_line": 30 }
   ],
   "warnings": [
     { "code": "NEEDS_HUMAN_REVIEW" | "AMBIGUOUS_BOUNDARY" | "INCONSISTENT_FORMAT", "message": "string" }
@@ -144,7 +144,7 @@
 
 ### 6.4 制約
 - `move_to_line`: `status="move"` のみ必須、1..N
-- `final_sections`: 昇順/重複禁止/欠落禁止、不要セクションは省略可
+- `final_sections`: 昇順/重複禁止、境界トークン行のみのギャップは許容
 - `rationale`: 25 words以内
 - `verdict`: 変更なし=accept、move/remove有り=adjust、確定不能=reject+warning
 
@@ -184,6 +184,16 @@
 - 別紙複数、署名欄なしで別紙のみ
 - OCR崩れ（改行欠落/全角半角混在）
 - ページフッター混入
+
+## 10. 実装メモ
+- 境界監査: `services/boundary_audit.py`
+- 監査プロンプト: `prompts/document_input_boundary_audit.md`
+- スキーマ: `configs/document_input/boundary_audit.schema.json`
+- テスト: `tests/test_tail_split.py`
+- テスト: `tests/test_document_input_full_split.py`
+- テスト: `tests/test_clause_boundary_audit.py`
+- 機能テスト: `scripts/functional_test_tail_split.py`
+- 機能テスト: `scripts/functional_test_clause_boundary_audit.py`
 
 ## 10. 期待効果
 - ルール: 高速・説明可能（候補広め）

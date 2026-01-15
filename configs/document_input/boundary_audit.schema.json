@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["verdict", "boundaries", "final_sections", "warnings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["accept", "adjust", "reject"]
+    },
+    "boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "section_after_boundary", "confidence", "rationale"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["accept", "move", "remove"]
+          },
+          "move_to_line": { "type": "integer", "minimum": 1 },
+          "section_after_boundary": {
+            "type": "string",
+            "enum": ["signature", "attachments", "unknown"]
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "rationale": { "type": "string" }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "move" } } },
+            "then": { "required": ["move_to_line"] }
+          }
+        ]
+      }
+    },
+    "final_sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "start_line", "end_line"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["clause_last", "signature", "attachments"]
+          },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "end_line": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "NEEDS_HUMAN_REVIEW",
+              "AMBIGUOUS_BOUNDARY",
+              "INCONSISTENT_FORMAT"
+            ]
+          },
+          "message": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

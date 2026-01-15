@@ -3,6 +3,7 @@
 import streamlit as st
 import asyncio
 import json
+import logging
 from api.contract_api import ContractAPI
 from api.knowledge_api import KnowledgeAPI
 from api.examination_api import examination_api
@@ -261,6 +262,7 @@ def render_sidebar_controls():
 
 def main():
     st.title("契約審査")
+    logger = logging.getLogger(__name__)
     if "contract_api" not in st.session_state:
         st.session_state["contract_api"] = ContractAPI()
     api = st.session_state["contract_api"]
@@ -323,9 +325,13 @@ def main():
                     tmp_file.write(uploaded.read())
                     tmp_path = tmp_file.name
                 try:
-                    result = extract_text_from_document(tmp_path)
+                    result = extract_text_from_document(
+                        tmp_path,
+                    )
                     if "error" in result:
-                        st.error(result["error"])
+                        logger.error("extract_text_from_document error: %s", result["error"])
+                        with st.sidebar:
+                            st.error(result["error"])
                     else:
                         st.session_state["exam_title"] = result.get("title", "")
                         st.session_state["exam_intro"] = result.get("introduction", "")
@@ -349,7 +355,9 @@ def main():
                         # 条項状態を初期化
                         initialize_clause_status(st.session_state["exam_clauses"])
                 except Exception as e:
-                    st.error(f"解析に失敗しました: {e}")
+                    logger.exception("extract_text_from_document failed")
+                    with st.sidebar:
+                        st.error(f"解析に失敗しました: {e}")
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
