@@ -35,6 +35,21 @@
   - 条文境界（第X条/Articleの補正）
   - 特定区間のみの再監査
 
+### 境界監査クラス 入出力（段落=1行）
+- 前提: LLM入力は「段落=1行」。紙面端の見た目改行は含まれない
+- 入力:
+  - `paragraphs: list[str]`（段落配列）
+  - `boundary_rules: list[BoundaryRule]`
+  - `max_candidates: dict`
+  - `preprocess: BoundaryPreprocessOptions`
+    - `preserve_empty_lines: bool`
+    - `line_number_width: int`
+  - `llm_config: LlmAuditConfig`
+- 出力:
+  - `sections: list[AuditedSection]`（`name/start_line/end_line/text`）
+  - `boundaries: list[BoundaryDecision]`（`id/status/move_to_line/confidence/rationale`）
+  - `warnings: list[AuditWarning]`
+
 ---
 
 # 末条文末尾（署名欄・別紙）ルール分割 & LLM監査 仕様書
@@ -60,9 +75,8 @@
 ## 4. 前処理
 - 行分割: `\n` で `lines[]` 生成（空行保持）
 - 擬似行生成（任意）:
-  - `。`/`.`/`;` の後に改行挿入
-  - 連続スペース/全角スペースで段落境界推定
-  - 過剰分割は避ける
+  - 改行欠落リスクはOCRモデル精査で対応する方針
+  - 適用する場合は `。`/`.`/`;` 後の改行挿入や連続スペース境界を保守的に利用
 - 行番号付与: `"[NNN] "`（1始まり/ゼロ埋め推奨）
 
 ## 5. ルールベース候補境界
@@ -77,7 +91,7 @@
 
 ### 5.3 署名候補ルール
 - 強指標（直前に挿入）:
-  - `署名`, `記名`, `押印`, `捺印`, `以上`, `締結の証`, `署名押印欄`
+  - `署名`, `記名`, `押印`, `捺印`, `締結の証`, `署名押印欄`
   - `IN WITNESS WHEREOF`, `Signed`, `Signature`
   - 日付行（`YYYY年MM月DD日`, `YYYY/MM/DD`, `YYYY-MM-DD`）
   - 当事者欄（`（甲）`, `（乙）`, `Company`, `Address`, `Name`, `Title`）
@@ -142,13 +156,13 @@
 ### 6.6 失敗時
 - 低信頼: `NEEDS_HUMAN_REVIEW`
 - JSON不正/制約違反: 監査失敗として `reject`
+- JSONパース失敗時は1回リトライ
 
 ## 7. ポスト処理
 - `final_sections` に従い抽出（`[NNN]` は除去可）
 - 整合性チェック:
-  - 全行を完全被覆
-  - `signature`: 日付/当事者欄の要素数が閾値以上
-  - `attachments`: 別紙キーワード/見出しらしさが閾値以上
+  - 全行を完全被覆（欠落/重複なし）
+  - `final_sections` は昇順/範囲内/重複禁止
   - 不整合は `NEEDS_HUMAN_REVIEW`
 - 出力:
   - `clause_last_text`
