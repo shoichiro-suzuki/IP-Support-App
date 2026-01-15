@@ -39,6 +39,7 @@ local_settings.py
 # Unit test / coverage reports
 .coverage
 .pytest_cache/
+tests/
 test*.py
 htmlcov/
 
@@ -46,3 +47,4 @@ htmlcov/
 *.log
 .mcp.json
 /.serena
+tmp/*

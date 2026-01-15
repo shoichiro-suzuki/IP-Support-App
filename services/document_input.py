@@ -1,14 +1,187 @@
 # pip install python-docx
 
+from typing import Callable, Optional
 
-def extract_text_from_document(file_path: str) -> dict:
-    import os
-    import mimetypes
-    from docx import Document
-    from azure_.documentintelligence import get_document_intelligence_ocr
-    from azure_.openai_service import AzureOpenAIService
+from services.boundary_audit import LlmAuditConfig, split_tail_sections
+
+
+def split_document_paragraphs(
+    paragraphs: list[str],
+    *,
+    enable_tail_audit: bool = True,
+    llm_config: Optional[LlmAuditConfig] = None,
+    llm_call: Optional[Callable[[list[dict]], str]] = None,
+    audit_clause_boundaries: bool = True,
+    clause_llm_call: Optional[Callable[[list[dict]], str]] = None,
+) -> dict:
+    lines = [line.rstrip("\n") for line in paragraphs]
+    chunked = _chunk_by_clauses(lines, enable_tail_audit, llm_config, llm_call)
+    if audit_clause_boundaries and "error" not in chunked:
+        merged = _merge_clauses_with_llm(chunked["clauses"], clause_llm_call)
+        if merged is None:
+            return {
+                "error": "条文境界のLLM監査に失敗しました。手動修正してください。",
+                "raw_text": "\n".join(lines),
+            }
+        chunked["clauses"] = merged
+    return chunked
+
+
+def _chunk_by_clauses(
+    lines: list[str],
+    enable_tail_audit: bool,
+    llm_config: Optional[LlmAuditConfig],
+    llm_call: Optional[Callable[[list[dict]], str]],
+) -> dict:
     import re
+
+    clause_pattern = re.compile(
+        r"^(第[0-9一二三四五六七八九十百千]+条|Article\s+\d+)",
+        flags=re.IGNORECASE,
+    )
+
+    def z2h_num(s: str) -> str:
+        return s.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+
+    clause_starts = []
+    for idx, line in enumerate(lines):
+        normalized = z2h_num(line.lstrip())
+        match = clause_pattern.match(normalized)
+        if match:
+            clause_starts.append((idx, match.group(1)))
+    title = ""
+    introduction = ""
+    clauses = []
+    signature_section = ""
+    attachments = []
+    if clause_starts:
+        intro_lines = lines[: clause_starts[0][0]]
+        if intro_lines:
+            title = intro_lines[0].strip()
+            introduction = "\n".join(intro_lines[1:]).strip()
+        for idx, (start, marker) in enumerate(clause_starts):
+            end = clause_starts[idx + 1][0] if idx + 1 < len(clause_starts) else len(lines)
+            clause_lines = lines[start:end]
+            clause_title = clause_lines[0].strip()
+            if marker.startswith("第"):
+                clause_number = marker.replace("第", "").replace("条", "")
+            elif marker.lower().startswith("article"):
+                clause_number = marker.split()[1] if len(marker.split()) > 1 else ""
+            else:
+                clause_number = marker
+            clause_text_body = "\n".join(clause_lines[1:]).strip()
+            clause_text = (
+                f"{clause_title}\n{clause_text_body}"
+                if clause_text_body
+                else clause_title
+            )
+            if enable_tail_audit and idx == len(clause_starts) - 1:
+                tail_result = split_tail_sections(
+                    clause_lines, llm_config=llm_config, llm_call=llm_call
+                )
+                clause_text = tail_result["clause_last_text"].strip()
+                signature_section = tail_result["signature_text"].strip()
+                attachments = tail_result["attachments"]
+            clauses.append(
+                {
+                    "id": len(clauses) + 1,
+                    "clause_number": clause_number,
+                    "text": clause_text,
+                }
+            )
+    else:
+        if lines:
+            title = lines[0].strip()
+            introduction = "\n".join(lines[1:]).strip()
+        else:
+            title = ""
+            introduction = ""
+    if attachments and signature_section:
+        for att in attachments:
+            if att and att in signature_section:
+                signature_section = signature_section.replace(att, "").strip()
+    return {
+        "title": title,
+        "introduction": introduction,
+        "clauses": clauses,
+        "signature_section": signature_section,
+        "attachments": attachments,
+    }
+
+
+def _merge_clauses_with_llm(
+    clauses: list[dict], llm_call: Optional[Callable[[list[dict]], str]]
+) -> Optional[list[dict]]:
     import json
+    from azure_.openai_service import AzureOpenAIService
+
+    system_prompt = """
+あなたは優秀な契約書解析AIです。
+契約書の条文を「第X条」で機械的に分割したJSONデータ（id, clause_number, text）を提供します。
+条文中に「第X条に従い」などの引用があると、不適切に分割されている可能性があります。
+隣り合うclause_numberの文章を結合すべきidのリストのみを出力してください。
+例: [2,3,4] / 複数グループは [[2,3],[5,6]]。結合不要なら []。
+出力はJSONのみ。
+"""
+    prompt = "### 条文リスト:\n" + json.dumps(
+        clauses, ensure_ascii=False, indent=2
+    )
+    messages = [
+        {"role": "system", "content": system_prompt.strip()},
+        {"role": "user", "content": prompt},
+    ]
+    call = llm_call
+    if call is None:
+        service = AzureOpenAIService()
+        call = service.get_openai_response_gpt41
+    try:
+        result = call(messages)
+        if isinstance(result, str):
+            result = (
+                result.replace("```json", "")
+                .replace("```", "")
+                .replace("\n", "")
+                .replace("\\", "")
+                .strip()
+            )
+        payload = json.loads(result)
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+    merged = []
+    used_ids = set()
+    for group in payload:
+        if not group:
+            continue
+        if isinstance(group, int):
+            group = [group]
+        if not isinstance(group, list):
+            return None
+        group_clauses = [c for c in clauses if c.get("id") in group]
+        if not group_clauses:
+            continue
+        min_id = min(c["id"] for c in group_clauses)
+        min_clause_number = [
+            c["clause_number"] for c in group_clauses if c["id"] == min_id
+        ][0]
+        merged_text = "".join(c["text"].strip() for c in group_clauses)
+        merged.append(
+            {"id": min_id, "clause_number": min_clause_number, "text": merged_text}
+        )
+        used_ids.update(group)
+    for clause in clauses:
+        if clause.get("id") not in used_ids:
+            merged.append(clause)
+    merged = sorted(merged, key=lambda x: x.get("id", 0))
+    return merged
+
+
+def extract_text_from_document(
+    file_path: str, *, audit_clause_boundaries: bool = True
+) -> dict:
+    import os
+    from azure_.documentintelligence import get_document_intelligence_ocr
 
     def extract_text_including_sdt(file_path: str) -> str:
         """
@@ -19,7 +192,7 @@ def extract_text_from_document(file_path: str) -> dict:
         - 変更履歴の削除(w:del)配下の文字は除外
         """
         import zipfile
-        from lxml import etree
+        import lxml.etree as etree
 
         ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
@@ -58,233 +231,39 @@ def extract_text_from_document(file_path: str) -> dict:
     # ファイル種別判定
     ext = os.path.splitext(file_path)[1].lower()
     text = ""
+    paragraphs = []
     if ext == ".docx":
         text = extract_text_including_sdt(file_path)
+        paragraphs = text.splitlines()
     elif ext in [".pdf"]:
         ocr = get_document_intelligence_ocr()
         result = ocr.analyze_document(file_path)
-        text = getattr(result, "content", "")
-        # OCR後、機械的なチャンキング前に <!-- ... --> 形式のコメントをすべて削除
-        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
-        text = re.sub(r"[#*`>\-]", "", text)
+        ocr_paragraphs = getattr(result, "paragraphs", None)
+        if ocr_paragraphs:
+            lines = []
+            for p in ocr_paragraphs:
+                content = p.get("content") if isinstance(p, dict) else getattr(p, "content", "")
+                if content:
+                    lines.append(content)
+            paragraphs = lines
+            text = "\n".join(lines)
+        else:
+            return {
+                "error": "PDF抽出で result.paragraphs.content が取得できませんでした。",
+                "raw_text": "",
+            }
     else:
         raise ValueError("対応していないファイル形式です")
 
-    # --- 機械的なチャンキング ---
-    def chunk_by_clauses(text):
-        import re
-
-        # 区切りパターンをリストで管理
-        CLAUSE_PATTERNS = [
-            r"第[0-9一二三四五六七八九十百千]+条",  # 日本語条文
-            r"Article\s+\d+",  # 英文条文
-            # 追加パターンがあればここに追記
-        ]
-        clause_pattern = r"(" + "|".join(CLAUSE_PATTERNS) + r")"
-
-        # 全角数字を半角数字に正規化
-        def z2h_num(s):
-            return s.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
-
-        text_norm = z2h_num(text)
-        parts = re.split(clause_pattern, text_norm)
-        title = ""
-        introduction = ""
-        clauses = []
-        signature_section = ""
-        attachments = []
-        if len(parts) > 1:
-            intro = parts[0].strip()
-            lines = intro.splitlines()
-            if lines:
-                title = lines[0].strip()
-                introduction = "\n".join(lines[1:]).strip()
-            else:
-                title = intro
-                introduction = ""
-            for i in range(1, len(parts) - 1, 2):
-                clause_marker = parts[i]
-                # 条文番号抽出: 日本語・英語両対応
-                if clause_marker.startswith("第"):
-                    clause_number = clause_marker.replace("第", "").replace("条", "")
-                elif clause_marker.lower().startswith("article"):
-                    clause_number = (
-                        clause_marker.split()[1]
-                        if len(clause_marker.split()) > 1
-                        else ""
-                    )
-                else:
-                    clause_number = clause_marker
-                clause_title = clause_marker
-                clause_text_body = parts[i + 1].strip()
-                clause_text = (
-                    f"{clause_title}\n{clause_text_body}"
-                    if clause_text_body
-                    else clause_title
-                )
-                if i + 2 >= len(parts):
-                    clause_lines = clause_text.splitlines()
-                    sig_keywords = [
-                        "署名",
-                        "記名",
-                        "押印",
-                        "印",
-                        "以上",
-                        "IN WITNESS WHEREOF",
-                    ]
-                    sig_idx = -1
-                    for idx, l in enumerate(clause_lines):
-                        if any(k in l for k in sig_keywords):
-                            sig_idx = idx
-                            break
-                    if sig_idx != -1:
-                        clause_text_main = "\n".join(clause_lines[:sig_idx]).strip()
-                        signature_section = "\n".join(clause_lines[sig_idx:]).strip()
-                        clause_text = clause_text_main
-                        # 署名セクションの後に別紙があればattachmentsとして保存
-                        # 残りの行を取得
-                        attachment_lines = clause_lines[sig_idx + 1 :]
-                        if attachment_lines:
-                            # 別紙キーワード
-                            att_keywords = [
-                                "別紙",
-                                "添付",
-                                "Annex",
-                                "Appendix",
-                                "Attachment",
-                            ]
-                            current_attachment = []
-                            for line in attachment_lines:
-                                if any(k in line for k in att_keywords):
-                                    if current_attachment:
-                                        attachments.append(
-                                            "\n".join(current_attachment).strip()
-                                        )
-                                        current_attachment = []
-                                    current_attachment.append(line)
-                                else:
-                                    if current_attachment:
-                                        current_attachment.append(line)
-                            if current_attachment:
-                                attachments.append(
-                                    "\n".join(current_attachment).strip()
-                                )
-                clauses.append(
-                    {
-                        "id": len(clauses) + 1,
-                        "clause_number": clause_number,
-                        "text": clause_text,
-                    }
-                )
-
-        else:
-            lines = text_norm.splitlines()
-            if lines:
-                title = lines[0].strip()
-                introduction = "\n".join(lines[1:]).strip()
-            else:
-                title = text_norm
-                introduction = ""
-            attachments = []
-        # attachmentsが存在する場合、signature_sectionからattachmentsの内容を除外
-        if attachments and signature_section:
-            for att in attachments:
-                if att and att in signature_section:
-                    signature_section = signature_section.replace(att, "").strip()
-        return {
-            "title": title,
-            "introduction": introduction,
-            "clauses": clauses,
-            "signature_section": signature_section,
-            "attachments": attachments,
-        }
-
-    chunked = chunk_by_clauses(text)
-
-    # LLMで結合すべきidのみを返すように指示
-    openai = AzureOpenAIService()
-    system_prompt = f"""
-あなたは優秀な契約書解析AIです。
-契約書の条文を「第X条」で機械的に分割したJSONデータ（id, clause_number, textを持つ）を提供します。
-ただし、条文中に「第X条に従い」などの引用があると、不適当に分割されている可能性がある。
-あなたの役割は、契約書の文脈を考慮して、隣り合うclause_numberの文章を結合すべき方が適当と思われるidのリストのみを出力してください。
-例えば、id=2,3,4が結合すべき場合は[2,3,4]のように出力します。複数グループある場合は[[2,3],[5,6]]のように出力します。
-結合しなくてよい場合は空リスト[]を返してください。
-出力は必ずJSON形式でお願いします。
-
-### 出力形式:
-```json
-[[2,3,4],[5,6]]
-```
-"""
-    prompt = "### 条文リスト:\n" + json.dumps(
-        chunked["clauses"], ensure_ascii=False, indent=2
+    chunked = split_document_paragraphs(
+        paragraphs, enable_tail_audit=True, audit_clause_boundaries=audit_clause_boundaries
     )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt},
-    ]
-    try:
-        result = openai.get_openai_response_gpt41(messages)
-        if isinstance(result, str):
-            result = (
-                result.replace("```json", "")
-                .replace("```", "")
-                .replace("\n", "")
-                .replace("\\", "")
-                .strip()
-            )
-    except Exception:
-        result = ""
-
-    def is_json(s):
-        try:
-            json.loads(s)
-            return True
-        except Exception:
-            return False
-
-    if not is_json(result):
-        return {
-            "error": "LLM補正に失敗しました。手動修正してください。",
-            "raw_text": text,
-        }
-
-    # LLM補正のid結合指示を反映して条文を結合
-    import copy
-
-    clauses = copy.deepcopy(chunked["clauses"])
-    merge_groups = json.loads(result)
-    merged = []
-    used_ids = set()
-    for group in merge_groups:
-        if not group:
-            continue
-        # group: [2,3,4] または 2 の場合もあるので、intならリスト化
-        if isinstance(group, int):
-            group = [group]
-        group_clauses = [c for c in clauses if c["id"] in group]
-        if not group_clauses:
-            continue
-        min_id = min(c["id"] for c in group_clauses)
-        min_clause_number = [
-            c["clause_number"] for c in group_clauses if c["id"] == min_id
-        ][0]
-        merged_text = "".join(c["text"].strip() for c in group_clauses)
-        merged.append(
-            {"id": min_id, "clause_number": min_clause_number, "text": merged_text}
-        )
-        used_ids.update(group)
-    # 結合されなかったものを追加
-    for c in clauses:
-        if c["id"] not in used_ids:
-            merged.append(c)
-    # id順にソート
-    merged = sorted(merged, key=lambda x: x["id"])
+    if "error" in chunked:
+        return chunked
     final_output = {
         "title": chunked["title"],
         "introduction": chunked["introduction"],
-        "clauses": merged,
+        "clauses": chunked["clauses"],
         "signature_section": chunked["signature_section"],
         "attachments": chunked["attachments"],
     }
