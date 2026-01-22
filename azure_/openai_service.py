@@ -5,16 +5,24 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 import os
 import streamlit as st
+from typing import Any, Optional
 
 
 @st.cache_resource
 def get_openai_client():
     """OpenAIクライアントをキャッシュして返す"""
     load_dotenv()
+    api_key = os.getenv("OPENAI_API_KEY")
+    api_version = os.getenv("OPENAI_API_VERSION")
+    azure_endpoint = os.getenv("OPENAI_API_BASE")
+    if api_key is None or api_version is None or azure_endpoint is None:
+        raise ValueError(
+            "OPENAI_API_KEY/OPENAI_API_VERSION/OPENAI_API_BASE が未設定です。"
+        )
     return AzureOpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        api_version=os.getenv("OPENAI_API_VERSION"),
-        azure_endpoint=os.getenv("OPENAI_API_BASE"),
+        api_key=api_key,
+        api_version=api_version,
+        azure_endpoint=azure_endpoint,
     )
 
 
@@ -73,7 +81,7 @@ class AzureOpenAIService:
             messages=messages,
             frequency_penalty=0.0,
             presence_penalty=0.0,
-            model="gpt-5",
+            model="gpt-5.1",
             reasoning_effort="minimal",  # 応答にどれだけ「深く考えるか」を制御: ["minimal", "low", "medium", "high"]
             verbosity="low",  # 応答の長さを制御: ["low", "medium", "high"]
         )
@@ -112,10 +120,17 @@ class AzureOpenAIService:
         answer = response.choices[0].message.content
         return answer
 
-    def get_openai_response_gpt51_chat(self, messages, format=None):
-        response = self.client.chat.completions.create(
-            model="gpt-5.1-chat", messages=messages, response_format=format
-        )
+    def get_openai_response_gpt51_chat(
+        self, messages, format: Optional[Any] = None
+    ):
+        if format is None:
+            response = self.client.chat.completions.create(
+                model="gpt-5.1-chat", messages=messages
+            )
+        else:
+            response = self.client.chat.completions.create(
+                model="gpt-5.1-chat", messages=messages, response_format=format
+            )
         answer = response.choices[0].message.content
         return answer
 

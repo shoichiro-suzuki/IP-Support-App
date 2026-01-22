@@ -23,25 +23,17 @@ azure_api_version = os.getenv("OPENAI_API_VERSION", "2024-12-01-preview")
 
 # 共有リソース
 def get_llm(model: str = "gpt-4.1") -> AzureChatOpenAI:
-    if model == "gpt-5-nano" or model == "gpt-5-mini" or model == "gpt-5":
-        return AzureChatOpenAI(
-            openai_api_key=azure_api_key,
-            openai_api_version=azure_api_version,
-            azure_endpoint=azure_endpoint,
-            azure_deployment=model,
-            timeout=30,
-            max_retries=0,
-        )
-    else:
-        return AzureChatOpenAI(
-            openai_api_key=azure_api_key,
-            openai_api_version=azure_api_version,
-            azure_endpoint=azure_endpoint,
-            azure_deployment=model,
-            temperature=0.0,
-            timeout=30,
-            max_retries=0,
-        )
+    params: dict[str, Any] = {
+        "api_key": azure_api_key,
+        "api_version": azure_api_version,
+        "azure_endpoint": azure_endpoint,
+        "azure_deployment": model,
+        "timeout": None,
+        "max_retries": 1,
+    }
+    if model not in ["gpt-5-nano", "gpt-5-mini", "gpt-5.1"]:
+        params["temperature"] = 0.0
+    return AzureChatOpenAI(**params)
 
 
 def get_llm_semaphore(max_concurrency: int = 8) -> asyncio.Semaphore:
@@ -66,21 +58,27 @@ async def ainvoke_with_limit(chain: Runnable, inp: dict | str) -> str:
                 msg = str(e).lower()
 
                 # トークン制限超過エラーの判定
-                if any(keyword in msg for keyword in [
-                    "context_length_exceeded",
-                    "maximum context length",
-                    "token limit",
-                    "too many tokens",
-                    "tokens exceeded",
-                    "max_tokens",
-                ]):
+                if any(
+                    keyword in msg
+                    for keyword in [
+                        "context_length_exceeded",
+                        "maximum context length",
+                        "token limit",
+                        "too many tokens",
+                        "tokens exceeded",
+                        "max_tokens",
+                    ]
+                ):
                     raise Exception(
                         f"トークン制限超過エラー: 入力データが大きすぎます。\n"
                         f"詳細: {str(e)}"
                     )
 
                 # レート制限またはタイムアウトエラーの判定
-                if "429" in msg or "timeout" in msg or "temporarily" in msg:
+                if any(
+                    keyword in msg
+                    for keyword in ["429", "timeout", "timed out", "temporarily"]
+                ):
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 8)
                 else:
@@ -255,6 +253,7 @@ async def amatching_clause_and_knowledge(
 
     aggregate_map: dict[str, list[str]] = {k["id"]: [] for k in knowledge_all}
     trace = {"prompts": [], "raw_responses": []}
+    chunk_errors: list[str] = []
 
     # LangChainプロンプト
     SYSTEM_PROMPT = """あなたは日本語の契約書に精通したリーガルアシスタントです。
@@ -348,12 +347,19 @@ clauses（契約条項の本文）:
         except Exception as e:
             raw = str(e)
             parsed = []
+            chunk_errors.append(raw)
         trace["prompts"].append({"chunk": chunk_idx, "messages": user_prompt})
         trace["raw_responses"].append({"chunk": chunk_idx, "raw": raw})
         return parsed
 
     chunk_tasks = [process_chunk(chunk, idx) for idx, chunk in enumerate(clause_chunks)]
     chunk_results = await asyncio.gather(*chunk_tasks)
+
+    if chunk_errors and all(not parsed for parsed in chunk_results):
+        raise Exception(
+            "ナレッジマッピングのLLM呼び出しが失敗しました。"
+            f"最後のエラー: {chunk_errors[-1]}"
+        )
 
     # 正常化 & 集約
     for parsed in chunk_results:

@@ -1,5 +1,6 @@
 # API/サービス概要
 - LLMは `azure_/openai_service.py` 経由でAzure OpenAIに接続。埋め込み`text-embedding-3-small`、各種GPT-4.1/5モデル呼び出しを提供。
+- 必須ENV: `OPENAI_API_KEY` / `OPENAI_API_VERSION` / `OPENAI_API_BASE`（未設定時は例外）。
 - Cosmos DBクライアントは `azure_/cosmosdb.py`（`get_cosmosdb_client` キャッシュ）。基本CRUDとベクトル検索`search_similar_vectors`を保持。
 
 ## api/contract_api.py
@@ -19,6 +20,11 @@
 ## api/examination_api.py
 - `examination_api(...)`: 条項とナレッジの対応を受け取り、非同期で審査→複数ナレッジの指摘がある条項を要約。`api.async_llm_service` の `run_batch_reviews/run_batch_summaries` を利用。`DEBUG` 環境変数がある場合は `Examination_data_sample.py` に追記。
 - `search_similar_clauses(...)`: `ContractAPI.search_similar_clauses` を呼び、条項番号ごとに類似条項をまとめる。
+
+## api/async_llm_service.py
+- `ainvoke_with_limit(...)`: レート制限/タイムアウト時は指数バックオフで最大5回リトライ（"timed out" 含む）。
+- `amatching_clause_and_knowledge(...)`: 条項とナレッジをマッピング。全チャンク失敗時は例外で返却。
+- `AzureChatOpenAI`: 初期化は `api_key` / `api_version` を使用。
 
 ## services
 - `document_input.extract_text_from_document(path, audit_clause_boundaries=True)`: `.docx` はSDT含むテキスト抽出（`lxml.etree` 使用）、`.pdf` は Document Intelligence OCR（`result.paragraphs.content` 必須）。既定で全条文境界＋末尾のLLM監査を行う。失敗時は `error` を返す。
