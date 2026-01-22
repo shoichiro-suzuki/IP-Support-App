@@ -248,7 +248,7 @@ def render_sidebar_controls():
                 "gpt-4.1-mini",
                 "gpt-5-mini",
                 "gpt-5-nano",
-                "gpt-5",
+                "gpt-5.1",
             ],
             key="sidebar_llm_model",
         )
@@ -537,7 +537,7 @@ def main():
                     "gpt-4.1-mini",
                     "gpt-5-mini",
                     "gpt-5-nano",
-                    "gpt-5",
+                    "gpt-5.1",
                 ],
                 key="sidebar_llm_model",
             )
