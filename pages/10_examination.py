@@ -153,7 +153,9 @@ def build_chat_context():
         )
 
     # ナレッジから必要なフィールドのみを抽出（ベクトルデータを除外）
-    knowledge_all = st.session_state.get("knowledge_all", [])
+    knowledge_all = st.session_state.get(
+        "exam_filtered_knowledge", st.session_state.get("knowledge_all", [])
+    )
     essential_fields = [
         "knowledge_number",
         "contract_type",
@@ -179,6 +181,16 @@ def build_chat_context():
         "analysis": st.session_state.get("analyzed_clauses", []),
         "knowledge": filtered_knowledge,
     }
+
+
+def filter_knowledge_by_contract_type(knowledge_all, selected_type):
+    if not selected_type or selected_type == "汎用":
+        return list(knowledge_all)
+    return [
+        k
+        for k in knowledge_all
+        if k.get("contract_type") in [selected_type, "汎用"]
+    ]
 
 
 def build_mapping_debug_info(knowledge_all, clauses, mapping_response, trace):
@@ -397,6 +409,10 @@ def main():
             current_type = st.selectbox(
                 "契約種別", list(type_map.keys()), key="exam_contract_type"
             )
+            filtered_knowledge = filter_knowledge_by_contract_type(
+                st.session_state.get("knowledge_all", []), current_type
+            )
+            st.session_state["exam_filtered_knowledge"] = filtered_knowledge
 
         # --- basic information -----------------------------------------------------
         with col_partys:
@@ -563,7 +579,8 @@ def main():
                             mapping_trace,
                         ) = asyncio.run(
                             async_llm_service.amatching_clause_and_knowledge(
-                                st.session_state["knowledge_all"], clauses
+                                st.session_state.get("exam_filtered_knowledge", []),
+                                clauses,
                             )
                         )
                     except Exception as e:
@@ -576,7 +593,7 @@ def main():
                     )
                     st.session_state["exam_mapping_debug_info"] = (
                         build_mapping_debug_info(
-                            st.session_state["knowledge_all"],
+                            st.session_state.get("exam_filtered_knowledge", []),
                             clauses,
                             mapping_response,
                             mapping_trace,
@@ -601,7 +618,9 @@ def main():
                             kn = next(
                                 (
                                     k
-                                    for k in st.session_state["knowledge_all"]
+                                    for k in st.session_state.get(
+                                        "exam_filtered_knowledge", []
+                                    )
                                     if str(k.get("id")) == str(kid)
                                 ),
                                 None,
@@ -615,7 +634,9 @@ def main():
                             partys=partys,
                             title=title,
                             clauses=clauses_augmented,
-                            knowledge_all=st.session_state["knowledge_all"],
+                            knowledge_all=st.session_state.get(
+                                "exam_filtered_knowledge", []
+                            ),
                             llm_model=llm_model,
                         )
                         if not analyzed_clauses:
@@ -727,7 +748,7 @@ def main():
 
             # ナレッジデータダウンロード機能
             knowledge_csv_data = export_knowledge_to_csv(
-                st.session_state["knowledge_all"]
+                st.session_state.get("exam_filtered_knowledge", [])
             )
             st.download_button(
                 "ナレッジ Download",
@@ -775,7 +796,9 @@ def call_analyze_function(analyzed):
         else:
             if not isinstance(knowledge_ids, list):
                 knowledge_ids = [knowledge_ids]
-            knowledge_all = st.session_state.get("knowledge_all", [])
+            knowledge_all = st.session_state.get(
+                "exam_filtered_knowledge", st.session_state.get("knowledge_all", [])
+            )
             for kid in knowledge_ids:
                 kn = next(
                     (k for k in knowledge_all if str(k.get("id")) == str(kid)),
