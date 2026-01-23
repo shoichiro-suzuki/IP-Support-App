@@ -4,6 +4,7 @@
 ## 契約審査 (`pages/10_examination.py`)
 - 入力: `.docx/.pdf` アップロード→`services/document_input.extract_text_from_document` でタイトル/前文/条項抽出（Document Intelligence OCR+全条文境界LLM監査+末尾監査）。
 - 審査: LLMで条項とナレッジをマッチング (`api.async_llm_service.amatching_clause_and_knowledge`)、非同期で審査/要約 (`api.examination_api.examination_api`)。モデル選択可（`gpt-5.1`/`gpt-5-mini`/`gpt-5-nano`）。
+- ナレッジ: 契約種別でフィルタ（汎用=全件、汎用以外=指定種別+汎用）。
 - 状態: 条項ごとに未審査/懸念有無を表示、懸念ありを自動展開。ナレッジ未紐付けリストを別枠表示。
 - チャット: サイドバー審査チャットは `exam_chat_history` を空リストで初期化し、KeyErrorを防止。
 - 出力: 審査結果CSV（契約基本情報+条項結果、BOM付き）、ナレッジCSVダウンロード。
