@@ -57,8 +57,8 @@
 
 ## 機能説明（情報共有用）
 
-![infographic.jpg](infographic-20260203\infographic-20260203.png)
+![infographic](infographic-20260203/infographic-20260203.png)
 
 ---
 
-![text](infographic-20260203\system_summary.md)
+[システム要約（Markdown）](infographic-20260203/system_summary.md)
