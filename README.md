@@ -52,3 +52,13 @@
 - `docs/PROMPT_FLOW_STATE_SPEC.md`
 - `docs/プロンプト説明.md`
 - `docs/infographic_feature_brief.md`
+
+---
+
+## 機能説明（情報共有用）
+
+![infographic.jpg](infographic-20260203\infographic-20260203.png)
+
+---
+
+![text](infographic-20260203\system_summary.md)
